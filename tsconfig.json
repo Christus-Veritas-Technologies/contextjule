@@ -1,0 +1,3 @@
+{
+  "extends": "@contextjule/config/tsconfig.base.json"
+}

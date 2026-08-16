@@ -1,0 +1,32 @@
+{
+  "name": "contextjule",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:web": "turbo run dev -F web --",
+    "dev:server": "turbo run dev -F server --",
+    "db:push": "turbo run db:push -F @contextjule/db --",
+    "db:studio": "turbo run db:studio -F @contextjule/db --",
+    "db:generate": "turbo run db:generate -F @contextjule/db --",
+    "db:migrate": "turbo run db:migrate -F @contextjule/db --"
+  },
+  "dependencies": {
+    "@contextjule/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@contextjule/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "turbo": "^2.10.7",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@11.4.0"
+}
