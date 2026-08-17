@@ -35,6 +35,11 @@ export interface SceneProps extends React.ComponentProps<"div"> {
   tufts?: { left: number; bottom: number; scale?: number };
   /** `left`/`bottom` of her frame's origin pixel, or `center` to centre her. */
   character?: { left: number | "center"; bottom: number };
+  /**
+   * Flip her horizontally. The walk strip is drawn facing one way only, so
+   * anything that moves her leftward has to set this.
+   */
+  mirrored?: boolean;
 }
 
 function Scene({
@@ -49,6 +54,7 @@ function Scene({
   cloud = { right: 34, top: 30, scale: 4 },
   tufts = { left: 0, bottom: 74, scale: 4 },
   character = { left: 248, bottom: 188 },
+  mirrored = false,
   className,
   children,
   style,
@@ -127,6 +133,7 @@ function Scene({
         action={action}
         state={state}
         scale={scale}
+        mirrored={mirrored}
         fx={false}
         anchor={centred ? "box" : "origin"}
         className={cn("absolute z-[2]", centred && "left-1/2 -translate-x-1/2")}
