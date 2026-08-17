@@ -1,10 +1,20 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Deliberately narrow. The app reads local session state and talks to Dodo's public license endpoints; it needs no filesystem, shell or http permissions beyond that.",
+  "windows": ["main", "panel", "mini-bar", "tray-flyout", "overlay"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:webview:allow-create-webview-window",
+    "opener:allow-open-url"
   ]
 }
