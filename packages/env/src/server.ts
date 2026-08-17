@@ -56,6 +56,17 @@ export const env = createEnv({
 
     /** Free claims allowed from one IP per day. Blunt, and enough. */
     FREE_CLAIM_IP_LIMIT: z.coerce.number().int().positive().default(3),
+
+    // --- publishing ---------------------------------------------------------
+    /**
+     * Bearer token for `POST /api/releases`, called by the release workflow.
+     *
+     * The only authenticated surface in the API — everything else is either
+     * public or authorised by a Dodo webhook signature. Optional so a local
+     * dev server boots without one; the endpoint returns 503 rather than
+     * defaulting to something guessable when it is unset.
+     */
+    ADMIN_TOKEN: z.string().min(32).optional(),
   },
   runtimeEnv: process.env,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
