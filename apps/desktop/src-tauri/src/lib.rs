@@ -8,12 +8,17 @@
 //! file that has it, and that is deliberate.
 
 mod license;
+mod sources;
+mod statusline;
 mod store;
 mod tray;
 mod windows;
 
 use serde::Serialize;
 use store::{Session, SessionUpsert, Stats, Store};
+use std::sync::mpsc;
+
+use sources::{SourceRunner, SourceStatus};
 use tauri::{Emitter, Manager, WindowEvent};
 
 // ── identity ────────────────────────────────────────────────────────────────
@@ -217,6 +222,39 @@ async fn license_deactivate(
     license::deactivate(&store).await
 }
 
+// ── sources ─────────────────────────────────────────────────────────────────
+
+/// Which readers are present, and where they are looking.
+///
+/// This doubles as the honest answer to "it is not working": the settings
+/// screen lists every source and whether its directory exists, so nobody has to
+/// guess why she is not watching anything.
+#[tauri::command]
+fn sources_status() -> Vec<SourceStatus> {
+    SourceRunner::new().status()
+}
+
+/// Whether ContextJule is currently Claude Code's status line command.
+#[tauri::command]
+fn statusline_installed() -> bool {
+    statusline::is_installed()
+}
+
+#[tauri::command]
+fn statusline_install() -> Result<(), String> {
+    statusline::install()
+}
+
+#[tauri::command]
+fn statusline_uninstall() -> Result<(), String> {
+    statusline::uninstall()
+}
+
+/// The `--statusline` process mode. See `statusline.rs`.
+pub fn run_statusline() {
+    statusline::run();
+}
+
 // ── window commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -302,6 +340,10 @@ pub fn run() {
             surface_position,
             cursor_position,
             set_load_state,
+            sources_status,
+            statusline_installed,
+            statusline_install,
+            statusline_uninstall,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -316,6 +358,39 @@ pub fn run() {
             app.manage(store);
 
             tray::build(&handle)?;
+
+            // The transcript readers run on their own thread and post through a
+            // channel. A blocking file read on a slow disk must not be able to
+            // wedge Tauri's runtime, and a source that throws must not take the
+            // app down with it.
+            let (tx, rx) = mpsc::channel::<sources::Reading>();
+            std::thread::spawn(move || {
+                SourceRunner::new().run(tx, std::time::Duration::from_secs(2));
+            });
+
+            let sink = handle.clone();
+            std::thread::spawn(move || {
+                for reading in rx {
+                    let Some(store) = sink.try_state::<Store>() else { continue };
+                    let written = store::session_upsert(
+                        &store,
+                        SessionUpsert {
+                            id: reading.session_key.clone(),
+                            source: reading.source.to_string(),
+                            title: reading.title.clone(),
+                            model: reading.model.clone(),
+                            window_size: Some(reading.window_size),
+                            tokens: reading.tokens,
+                        },
+                        reading.at,
+                    );
+                    // Every window refreshes off this rather than polling the
+                    // database on a timer of its own.
+                    if written.is_ok() {
+                        let _ = sink.emit("session-updated", &reading);
+                    }
+                }
+            });
 
             // The overlay is a transparent rectangle much larger than she is.
             // It starts click-through so it never eats a click meant for the
