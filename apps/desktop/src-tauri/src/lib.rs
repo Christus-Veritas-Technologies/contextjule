@@ -8,12 +8,17 @@
 //! file that has it, and that is deliberate.
 
 mod license;
+mod sources;
+mod statusline;
 mod store;
 mod tray;
 mod windows;
 
 use serde::Serialize;
 use store::{Session, SessionUpsert, Stats, Store};
+use std::sync::mpsc;
+
+use sources::{SourceRunner, SourceStatus};
 use tauri::{Emitter, Manager, WindowEvent};
 
 // ── identity ────────────────────────────────────────────────────────────────
@@ -217,6 +222,39 @@ async fn license_deactivate(
     license::deactivate(&store).await
 }
 
+// ── sources ─────────────────────────────────────────────────────────────────
+
+/// Which readers are present, and where they are looking.
+///
+/// This doubles as the honest answer to "it is not working": the settings
+/// screen lists every source and whether its directory exists, so nobody has to
+/// guess why she is not watching anything.
+#[tauri::command]
+fn sources_status() -> Vec<SourceStatus> {
+    SourceRunner::new().status()
+}
+
+/// Whether ContextJule is currently Claude Code's status line command.
+#[tauri::command]
+fn statusline_installed() -> bool {
+    statusline::is_installed()
+}
+
+#[tauri::command]
+fn statusline_install() -> Result<(), String> {
+    statusline::install()
+}
+
+#[tauri::command]
+fn statusline_uninstall() -> Result<(), String> {
+    statusline::uninstall()
+}
+
+/// The `--statusline` process mode. See `statusline.rs`.
+pub fn run_statusline() {
+    statusline::run();
+}
+
 // ── window commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -374,6 +412,10 @@ pub fn run() {
             surface_position,
             cursor_position,
             set_load_state,
+            sources_status,
+            statusline_installed,
+            statusline_install,
+            statusline_uninstall,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -1,6 +1,6 @@
 # 0001 — How ContextJule reads the context window
 
-Status: proposed
+Status: accepted — source layer and the Claude Code source implemented
 Date: 2026-08-17
 
 ## The problem
@@ -208,10 +208,68 @@ honest answer to "it does not work": it says which sources were found.
 - `window_size` still has to be inferred from the model name. `contextWindowFor`
   in @contextjule/core already does this and is the one estimate that remains.
 
-## Open questions
+## Answered since
 
-1. Does claude.ai's streamed response expose `usage`? Verify before option 3.
-2. Do Anthropic's and OpenAI's terms permit an app-owned webview that
-   instruments the page? Legal question; answer before building option 3.
-3. Windows paths for the CLI transcripts — the sources found document macOS and
-   Linux only. Confirm on a real Windows install.
+### Paths — settled
+
+Claude Code's own documentation states it: transcripts are JSONL at
+`~/.claude/projects/<project>/<session-id>.jsonl`, where `<project>` is the
+working directory with non-alphanumeric characters replaced by `-`, truncated
+to 200 characters with a hash appended when longer. `~` resolves to
+`%USERPROFILE%` on Windows, so there is no separate Windows path to special-case.
+`CLAUDE_CONFIG_DIR` moves the whole root and is honoured. Transcripts are kept
+30 days by default (`cleanupPeriodDays`) and can be suppressed entirely with
+`CLAUDE_CODE_SKIP_PROMPT_HISTORY`, so their absence is a supported state, not a
+bug. Codex writes to `~/.codex/sessions/`.
+
+### A better interface than any of the above
+
+The same documentation carries a warning worth taking seriously: *"the entry
+format is internal to Claude Code and changes between versions, so scripts that
+parse these files directly can break on any release."* It then points at the
+supported alternative — and the **status line** turns out to be exactly what
+this product needs.
+
+Claude Code runs a configured command on every render and passes it the session
+as JSON on stdin. That payload contains:
+
+    context_window.total_input_tokens    "tokens currently in the context window"
+    context_window.context_window_size   the window itself
+    context_window.current_usage         input / output / cache_creation / cache_read
+    model.display_name · session_id · session_name · cwd · workspace.git_branch
+    cost.total_cost_usd · exceeds_200k_tokens · rate_limits
+
+`total_input_tokens` is defined by the docs as the sum of `input_tokens`,
+`cache_creation_input_tokens` and `cache_read_input_tokens` — the exact number
+this app exists to display, computed by Claude Code itself. `context_window_size`
+removes the last estimate in the whole system: `window_size_for()` is no longer
+guessing from a model name.
+
+So ContextJule registers **itself** as the status line command, in a
+`--statusline` process mode that writes the reading to the local SQLite and
+prints a Jule-coloured context bar back to the terminal. The user gets a status
+line; we get exact numbers through an interface meant for this.
+
+Both paths ship. The transcript reader needs no setup and can see history, which
+is what fills the sessions screen on first launch; the status line needs one
+click and reports the live turn with `CONFIDENCE_EXACT`, which wins on conflict.
+An existing `statusLine` command is preserved, chained and restored on uninstall.
+
+### claude.ai's streamed `usage` — still unverified
+
+Not answerable from public documentation. The public Messages API emits
+`message_start` with `usage.input_tokens` and `message_delta` with
+`usage.output_tokens`; claude.ai's own endpoint is undocumented, and the only
+sources describing it are unofficial reverse-engineering projects this decision
+will not rest on. It needs one observed session to settle.
+
+Its urgency dropped sharply, though. The status line covers the audience the
+design's mock data describes, exactly, through a supported interface — so
+option 3 is now a coverage question for browser-only users rather than the
+critical path.
+
+## Still open
+
+Whether Anthropic's and OpenAI's terms permit an app-owned webview that
+instruments the page. Legal, not technical. Answer before writing any of
+option 3.

@@ -151,6 +151,23 @@ export const licenseValidate = () => call<LicenseState>("license_validate", unde
 export const licenseDeactivate = () =>
   call<LicenseState>("license_deactivate", undefined, NO_HOST_LICENSE);
 
+// ── sources ─────────────────────────────────────────────────────────────────
+
+export interface SourceStatus {
+  id: string;
+  label: string;
+  available: boolean;
+  root: string | null;
+  lastReadingAt: number | null;
+}
+
+export const sourcesStatus = () => call<SourceStatus[]>("sources_status", undefined, []);
+
+/** Whether ContextJule is currently Claude Code's status line command. */
+export const statuslineInstalled = () => call<boolean>("statusline_installed", undefined, false);
+export const statuslineInstall = () => call<void>("statusline_install", undefined, undefined);
+export const statuslineUninstall = () => call<void>("statusline_uninstall", undefined, undefined);
+
 // ── windows ─────────────────────────────────────────────────────────────────
 
 export type Surface = "main" | "panel" | "mini-bar" | "tray-flyout" | "overlay";

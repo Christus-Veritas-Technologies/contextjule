@@ -3,6 +3,26 @@ import { useCallback, useEffect, useState } from "react";
 import * as ipc from "./ipc";
 
 /**
+ * Refresh when Rust says a session changed.
+ *
+ * The source readers post through a channel and the host emits `session-updated`,
+ * so nothing here polls the database on a timer. Five windows on a two-second
+ * poll each would be five times the work for a strictly worse latency.
+ */
+function useSessionEvents(reload: () => void) {
+  useEffect(() => {
+    if (!ipc.hasHost()) return;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) =>
+      listen("session-updated", () => reload()).then((fn) => {
+        unlisten = fn;
+      }),
+    );
+    return () => unlisten?.();
+  }, [reload]);
+}
+
+/**
  * Small hooks over the local store.
  *
  * They all follow the same shape — load once, expose a `reload` — because
@@ -30,6 +50,7 @@ function useAsync<T>(load: () => Promise<T>, initial: T) {
   }, []);
 
   useEffect(() => reload(), [reload]);
+  useSessionEvents(reload);
 
   return { data, loading, reload };
 }
@@ -50,6 +71,11 @@ export function useStats() {
 
 export function useUnlocks() {
   return useAsync(() => ipc.unlocksList(), [] as string[]);
+}
+
+/** Which readers exist and whether their directories are there. */
+export function useSources() {
+  return useAsync(() => ipc.sourcesStatus(), [] as ipc.SourceStatus[]);
 }
 
 /**
