@@ -161,16 +161,22 @@ fn run_previous(command: &str, stdin_payload: &str) -> Option<String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    let mut child = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(["/C", command])
+    let mut shell = if cfg!(target_os = "windows") {
+        let mut builder = Command::new("cmd");
+        builder.args(["/C", command]);
+        builder
     } else {
-        Command::new("sh").args(["-c", command])
-    }
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::null())
-    .spawn()
-    .ok()?;
+        let mut builder = Command::new("sh");
+        builder.args(["-c", command]);
+        builder
+    };
+
+    let mut child = shell
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
 
     if let Some(stdin) = child.stdin.as_mut() {
         let _ = stdin.write_all(stdin_payload.as_bytes());
