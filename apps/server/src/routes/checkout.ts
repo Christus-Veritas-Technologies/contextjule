@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { dodo } from "../lib/dodo";
-import { badRequest, clientIp, tooMany } from "../lib/http";
+import { badRequest, clientIp, notFound, tooMany } from "../lib/http";
 
 /**
  * Checkout.
@@ -42,9 +42,10 @@ checkoutRoutes.post("/", async (c) => {
     throw badRequest("offer_unavailable", "That offer is not running right now.");
   }
 
-  // A free claim is the only route worth rate limiting here — Dodo's own usage
-  // cap is the real ceiling, this just keeps one script from eating it in a
-  // minute and denying everyone else.
+  // A free claim is the only route worth counting in the database — the
+  // in-memory limiter in `index.ts` stops a burst, and this stops a slow drip
+  // over a day. Dodo's own usage cap on the code is the real ceiling; both of
+  // these exist so one person cannot spend it.
   if (offer === "free") {
     const ip = clientIp(c);
     if (ip) {
@@ -92,17 +93,112 @@ checkoutRoutes.post("/", async (c) => {
   });
 });
 
-/** What the site should render: which offers are live, and at what price. */
-checkoutRoutes.get("/offers", (c) => {
+/**
+ * What the site should render: which offers are live, and at what price.
+ *
+ * `soldOut` is the one that matters for the free promotion. The cap is enforced
+ * by Dodo, but the site needs to know before it renders a button that would
+ * fail — so the mirrored Discount row is read here, and a code past its usage
+ * limit or its end date is reported as exhausted rather than offered.
+ */
+checkoutRoutes.get("/offers", async (c) => {
+  const codes = (Object.keys(OFFER_SPECS) as Offer[])
+    .map((offer) => ({ offer, code: discountFor(offer) }))
+    .filter((entry): entry is { offer: Offer; code: string } => Boolean(entry.code));
+
+  const discounts = codes.length
+    ? await prisma.discount.findMany({ where: { code: { in: codes.map((entry) => entry.code) } } })
+    : [];
+
+  const now = new Date();
+  const byCode = new Map(discounts.map((discount) => [discount.code, discount]));
+
+  const offers = (Object.keys(OFFER_SPECS) as Offer[])
+    .map((offer) => {
+      const code = discountFor(offer);
+      // The full price is always available: it needs no code to exist.
+      if (offer === "full") {
+        return { offer, available: true, soldOut: false, remaining: null as number | null };
+      }
+      if (!code) return null;
+
+      const discount = byCode.get(code);
+      // A code we have not mirrored yet is assumed live. Dodo is the authority
+      // and will reject it at checkout if it is not — better than hiding an
+      // offer the moment the seed has not been run.
+      if (!discount) {
+        return { offer, available: true, soldOut: false, remaining: null as number | null };
+      }
+
+      const expired = Boolean(discount.expiresAt && discount.expiresAt < now);
+      const notStarted = Boolean(discount.startsAt && discount.startsAt > now);
+      const remaining =
+        discount.usageLimit === null ? null : Math.max(0, discount.usageLimit - discount.timesUsed);
+      const soldOut = remaining !== null && remaining === 0;
+
+      return {
+        offer,
+        available: discount.active && !expired && !notStarted && !soldOut,
+        soldOut,
+        remaining,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
   return c.json({
-    offers: (Object.keys(OFFER_SPECS) as Offer[])
-      .filter((offer) => offer === "full" || Boolean(discountFor(offer)))
-      .map((offer) => ({
-        id: offer,
-        label: OFFER_SPECS[offer].label,
-        amount: OFFER_SPECS[offer].amount,
-        currency: "USD",
-      })),
+    offers: offers.map((entry) => ({
+      id: entry.offer,
+      label: OFFER_SPECS[entry.offer].label,
+      amount: OFFER_SPECS[entry.offer].amount,
+      currency: "USD",
+      available: entry.available,
+      soldOut: entry.soldOut,
+      remaining: entry.remaining,
+    })),
+  });
+});
+
+/**
+ * What happened to a checkout.
+ *
+ * The thanks page needs this. Dodo redirects back the moment the card clears,
+ * which is usually before the webhook lands, so the page has to be able to poll
+ * for "your key is ready" instead of showing a blank or, worse, claiming
+ * failure. The session id is a high-entropy value the buyer's own browser
+ * received from `POST /api/checkout`, and the key is only returned once a
+ * succeeded payment is attached to it.
+ */
+checkoutRoutes.get("/:sessionId", async (c) => {
+  const sessionId = c.req.param("sessionId");
+  const checkout = await prisma.checkout.findUnique({
+    where: { dodoSessionId: sessionId },
+    include: {
+      payment: { include: { licenseKeys: { orderBy: { createdAt: "desc" }, take: 1 } } },
+      customer: { include: { licenseKeys: { orderBy: { createdAt: "desc" }, take: 1 } } },
+    },
+  });
+
+  if (!checkout) throw notFound("unknown_session", "We have no record of that checkout.");
+
+  const payment = checkout.payment;
+  const paid = payment?.status === "succeeded";
+  // Prefer the key attached to this payment; fall back to the customer's newest
+  // one, because the two webhooks race and the link is written by whichever
+  // arrives second.
+  const key = paid ? (payment.licenseKeys[0] ?? checkout.customer?.licenseKeys[0] ?? null) : null;
+
+  return c.json({
+    sessionId,
+    status: checkout.status,
+    offer: checkout.offer,
+    paid,
+    // Null while the webhook is still in flight. The page should poll, not
+    // conclude anything from this being absent.
+    licenseKey: key?.key ?? null,
+    email: checkout.email ?? checkout.customer?.email ?? null,
+    amountMinor: payment?.totalMinor ?? null,
+    currency: payment?.currency ?? "USD",
+    completedAt: checkout.completedAt,
   });
 });
 

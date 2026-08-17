@@ -1,6 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  type CosmeticSlot,
+  earnedCosmetics,
+  equippedFromSettings,
+  wardrobeKey,
+} from "@contextjule/core";
+
 import * as ipc from "./ipc";
+
+/**
+ * Refresh when Rust says a session changed.
+ *
+ * The source readers post through a channel and the host emits
+ * `session-updated`, so nothing here polls the database on a timer. Five
+ * windows each on their own poll would be five times the work for strictly
+ * worse latency.
+ */
+function useSessionEvents(reload: () => void) {
+  useEffect(() => {
+    if (!ipc.hasHost()) return;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) =>
+      listen("session-updated", () => reload()).then((fn) => {
+        unlisten = fn;
+      }),
+    );
+    return () => unlisten?.();
+  }, [reload]);
+}
 
 /**
  * Small hooks over the local store.
@@ -30,6 +58,7 @@ function useAsync<T>(load: () => Promise<T>, initial: T) {
   }, []);
 
   useEffect(() => reload(), [reload]);
+  useSessionEvents(reload);
 
   return { data, loading, reload };
 }
@@ -82,4 +111,34 @@ export function useCurrentSession() {
   const { data, loading, reload } = useSessions(undefined, 1);
   const current = data.find((session) => session.endedAt === null) ?? null;
   return { session: current, loading, reload };
+}
+
+/** Which readers exist and whether their directories are there. */
+export function useSources() {
+  return useAsync(() => ipc.sourcesStatus(), [] as ipc.SourceStatus[]);
+}
+
+/**
+ * What she is wearing, and what she has earned.
+ *
+ * `earned` unions the granted rows with whatever the current stats already
+ * qualify for. The grant is a record of when something was reached, not the
+ * gate itself — so a stats recount never takes a cosmetic away, and someone who
+ * crosses a threshold sees it unlock immediately rather than on next launch.
+ */
+export function useWardrobe() {
+  const { settings, set } = useSettings();
+  const { data: stats } = useStats();
+  const { data: granted, reload } = useAsync(() => ipc.unlocksList(), [] as string[]);
+
+  const equipped = equippedFromSettings(settings);
+  const earned = new Set([...granted, ...earnedCosmetics(stats)]);
+
+  const equip = async (slot: CosmeticSlot, id: string | null) => {
+    await set(wardrobeKey(slot), id ?? "");
+    if (id) await ipc.unlockGrant(id);
+    reload();
+  };
+
+  return { equipped, earned, stats, equip };
 }

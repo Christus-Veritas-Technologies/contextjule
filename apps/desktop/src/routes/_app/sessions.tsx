@@ -1,6 +1,7 @@
 import { formatTokens } from "@contextjule/core/format";
 import { SessionRow } from "@contextjule/ui/components/rows";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 
 import { useSessions } from "../../lib/data";
 import { hasHost } from "../../lib/ipc";
@@ -18,7 +19,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * rather than using a zebra tint, so the rule between them stays the divider.
  */
 function Sessions() {
-  const { data: sessions, loading } = useSessions(Date.now() - DAY_MS, 50);
+  const [scope, setScope] = useState<"today" | "all">("today");
+  const { data: sessions, loading } = useSessions(
+    scope === "today" ? Date.now() - DAY_MS : undefined,
+    scope === "today" ? 50 : 200,
+  );
 
   // With no Tauri host this is a design review, so show the sheet's own rows.
   const rows = hasHost()
@@ -46,7 +51,21 @@ function Sessions() {
   return (
     <div className="flex h-full flex-col bg-cream">
       <div className="flex items-baseline justify-between gap-2.5 border-b-2 border-cream-rule px-4 pt-4 pb-3">
-        <span className="font-pixel text-[11px] text-[#231b12]">today</span>
+        {/* Two words rather than a dropdown: there are only ever two scopes,
+            and a select here would be the one generic control on the screen. */}
+        <div className="flex items-baseline gap-3">
+          {(["today", "all"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setScope(option)}
+              className="font-pixel text-[11px] outline-none"
+              style={{ color: scope === option ? "#231b12" : "#8a7660" }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
         <span className="font-pixel text-[9px] whitespace-nowrap text-[#8a7660]">
           {rows.length === 0
             ? "nothing yet"
@@ -90,8 +109,7 @@ function Sessions() {
 }
 
 function noteFor(tokens: number, cleanses: number): string {
-  const suffix =
-    cleanses === 0 ? "" : ` ${cleanses} cleanse${cleanses === 1 ? "" : "s"}.`;
+  const suffix = cleanses === 0 ? "" : ` ${cleanses} cleanse${cleanses === 1 ? "" : "s"}.`;
   if (tokens >= 128_000) return `Crashed.${suffix}`;
   if (tokens >= 32_000) return `Heavy.${suffix}`;
   if (tokens >= 5_000) return `Loaded.${suffix}`;

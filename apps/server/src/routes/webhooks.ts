@@ -1,7 +1,19 @@
 import prisma from "@contextjule/db";
+import { env } from "@contextjule/env/server";
 import { Hono } from "hono";
 
-import { dodo, type DodoWebhookPayload } from "../lib/dodo";
+import { dodo } from "../lib/dodo";
+import {
+  customerFrom,
+  type DodoEvent,
+  grantStatusFor,
+  isHandled,
+  licenseKeyFrom,
+  paymentFrom,
+  refundTargetFrom,
+  resolveOffer,
+  revokedKeyFrom,
+} from "../lib/dodo-payload";
 import {
   deliverPurchase,
   recordLicenseKey,
@@ -12,37 +24,46 @@ import {
 /**
  * Dodo webhooks.
  *
- * Three properties this handler has to hold, in order of how much they hurt
- * when they are missing:
+ * Four properties this handler has to hold, in order of how much they hurt when
+ * they are missing:
  *
  *   1. Signature verified before anything is read. The body is parsed by the
  *      SDK's `unwrap`, never by us, so an unsigned payload cannot reach a query.
  *   2. Idempotent. Delivery is at-least-once; a duplicate `webhook-id` is
  *      dropped on a unique index rather than issuing a second license key.
- *   3. Fails loudly. A 500 asks Dodo to retry — which is what we want when the
+ *   3. Order-independent. `payment.succeeded` and `entitlement_grant.delivered`
+ *      race constantly, so either one arriving second is what sends the email
+ *      and neither sends it twice.
+ *   4. Fails loudly. A 500 asks Dodo to retry — which is what we want when the
  *      database is briefly down — but a payload we simply do not handle is a
  *      200, so it is not retried forever.
+ *
+ * The reading of each payload lives in `lib/dodo-payload.ts`, which has no
+ * imports and is therefore actually testable. This file is the part that talks
+ * to the database.
  */
 export const webhookRoutes = new Hono();
 
 webhookRoutes.post("/dodo", async (c) => {
   const raw = await c.req.text();
 
-  let event: DodoWebhookPayload;
+  const webhookId = c.req.header("webhook-id") ?? "";
+  if (!webhookId) return c.json({ error: "missing_webhook_id" }, 400);
+
+  let event: DodoEvent;
   try {
     event = dodo.webhooks.unwrap(raw, {
       headers: {
-        "webhook-id": c.req.header("webhook-id") ?? "",
+        "webhook-id": webhookId,
         "webhook-signature": c.req.header("webhook-signature") ?? "",
         "webhook-timestamp": c.req.header("webhook-timestamp") ?? "",
       },
-    }) as DodoWebhookPayload;
+    }) as DodoEvent;
   } catch {
+    // Deliberately no detail. An attacker probing the signature scheme learns
+    // nothing from this response that they did not already know.
     return c.json({ error: "invalid_signature" }, 401);
   }
-
-  const webhookId = c.req.header("webhook-id") ?? "";
-  if (!webhookId) return c.json({ error: "missing_webhook_id" }, 400);
 
   // Claim the delivery. A duplicate loses the race on the unique index and
   // returns 200 without doing the work again.
@@ -83,147 +104,280 @@ webhookRoutes.post("/dodo", async (c) => {
   }
 });
 
-async function handle(event: DodoWebhookPayload): Promise<boolean> {
-  const data = event.data as Record<string, any>;
+async function handle(event: DodoEvent): Promise<boolean> {
+  if (!isHandled(event.type)) return false;
 
   switch (event.type) {
     case "payment.succeeded":
-    case "payment.failed": {
-      const email = data.customer?.email;
-      if (!email) return false;
-
-      const customer = await upsertCustomer({
-        email,
-        dodoCustomerId: data.customer?.customer_id ?? data.customer?.id ?? null,
-        name: data.customer?.name ?? null,
-        country: data.billing?.country ?? null,
-      });
-
-      const payment = await recordPayment({
-        dodoPaymentId: data.payment_id ?? data.id,
-        customerId: customer.id,
-        status: event.type === "payment.succeeded" ? "succeeded" : "failed",
-        totalMinor: Number(data.total_amount ?? data.settlement_amount ?? 0),
-        subtotalMinor: data.subtotal_amount != null ? Number(data.subtotal_amount) : null,
-        currency: data.currency ?? "USD",
-        discountCode: data.discount_id ?? data.discount_code ?? null,
-        paymentMethod: data.payment_method ?? null,
-        raw: event,
-      });
-
-      if (event.type !== "payment.succeeded") return true;
-
-      // The key may already be here (grant delivered first) or may not be
-      // (payment first). Either order ends with exactly one email, because
-      // whichever handler finds a key sends it and the other finds none.
-      const key = await prisma.licenseKey.findFirst({
-        where: { customerId: customer.id },
-        orderBy: { createdAt: "desc" },
-      });
-
-      if (key) {
-        await prisma.licenseKey.update({ where: { id: key.id }, data: { paymentId: payment.id } });
-        await deliverPurchase({
-          email: customer.email,
-          customerId: customer.id,
-          licenseKeyId: key.id,
-          licenseKey: key.key,
-          free: payment.totalMinor === 0,
-        });
-      }
-      return true;
-    }
+    case "payment.failed":
+      return handlePayment(event, event.type === "payment.succeeded");
 
     case "payment.refunded":
-    case "refund.succeeded": {
-      const paymentId = data.payment_id ?? data.payment?.payment_id;
-      if (!paymentId) return false;
-      const payment = await prisma.payment.update({
-        where: { dodoPaymentId: paymentId },
-        data: { status: "refunded", refundedAt: new Date() },
-      });
-      // A refunded key stops validating, which is what the desktop app's
-      // seven-day offline grace is sized against.
-      await prisma.licenseKey.updateMany({
-        where: { paymentId: payment.id },
-        data: { status: "revoked" },
-      });
-      return true;
-    }
+    case "refund.succeeded":
+      return handleReversal(event, "refunded");
+
+    // A dispute is a refund we did not choose. Same consequence for the key:
+    // it stops validating, and the app falls back to its offline grace before
+    // locking, so nobody is cut off mid-sentence.
+    case "dispute.opened":
+    case "dispute.accepted":
+      return handleReversal(event, "disputed");
 
     case "license_key.created":
     case "entitlement_grant.created":
-    case "entitlement_grant.delivered": {
-      const licenseKey = data.license_key ?? data;
-      const keyValue = licenseKey?.key ?? licenseKey?.license_key;
-      const email = data.customer?.email ?? licenseKey?.customer?.email;
-      if (!keyValue || !email) return false;
-
-      const customer = await upsertCustomer({
-        email,
-        dodoCustomerId: data.customer?.customer_id ?? null,
-        name: data.customer?.name ?? null,
-      });
-
-      const stored = await recordLicenseKey({
-        key: keyValue,
-        dodoLicenseKeyId: licenseKey?.id ?? licenseKey?.license_key_id ?? null,
-        customerId: customer.id,
-        activationsLimit: licenseKey?.activations_limit ?? null,
-        activationsUsed: licenseKey?.instances_count ?? licenseKey?.activations_used ?? 0,
-        expiresAt: licenseKey?.expires_at ? new Date(licenseKey.expires_at) : null,
-      });
-
-      if (data.grant_id ?? data.id) {
-        await prisma.entitlementGrant.upsert({
-          where: { dodoGrantId: String(data.grant_id ?? data.id) },
-          create: {
-            dodoGrantId: String(data.grant_id ?? data.id),
-            status: event.type === "entitlement_grant.delivered" ? "delivered" : "pending",
-            customerId: customer.id,
-            licenseKeyId: stored.id,
-            deliveredAt: event.type === "entitlement_grant.delivered" ? new Date() : null,
-            raw: event as never,
-          },
-          update: {
-            status: event.type === "entitlement_grant.delivered" ? "delivered" : undefined,
-            licenseKeyId: stored.id,
-            deliveredAt: event.type === "entitlement_grant.delivered" ? new Date() : undefined,
-          },
-        });
-      }
-
-      const payment = await prisma.payment.findFirst({
-        where: { customerId: customer.id, status: "succeeded" },
-        orderBy: { createdAt: "desc" },
-      });
-
-      // Only mail once the payment is known, so a free claim is labelled
-      // correctly in the subject line rather than guessed at.
-      if (payment) {
-        await deliverPurchase({
-          email: customer.email,
-          customerId: customer.id,
-          licenseKeyId: stored.id,
-          licenseKey: stored.key,
-          free: payment.totalMinor === 0,
-        });
-      }
-      return true;
-    }
+    case "entitlement_grant.delivered":
+      return handleLicenseKey(event);
 
     case "license_key.revoked":
-    case "entitlement_grant.revoked": {
-      const keyValue = data.license_key?.key ?? data.key;
-      if (!keyValue) return false;
-      await prisma.licenseKey.updateMany({
-        where: { key: keyValue },
-        data: { status: "revoked" },
-      });
-      return true;
-    }
+    case "entitlement_grant.revoked":
+      return handleRevocation(event);
 
     default:
       return false;
   }
+}
+
+async function handlePayment(event: DodoEvent, succeeded: boolean): Promise<boolean> {
+  const who = customerFrom(event);
+  const fields = paymentFrom(event);
+  if (!who || !fields) return false;
+
+  const customer = await upsertCustomer(who);
+
+  // Checked before the upsert so a manual replay of an old event cannot
+  // increment the discount counter a second time. The counter drives whether
+  // the site still shows the free offer, so drift there hides a live promotion
+  // or keeps a spent one on screen.
+  const firstTime = !(await prisma.payment.findUnique({
+    where: { dodoPaymentId: fields.dodoPaymentId },
+    select: { id: true },
+  }));
+
+  const payment = await recordPayment({
+    dodoPaymentId: fields.dodoPaymentId,
+    customerId: customer.id,
+    status: succeeded ? "succeeded" : "failed",
+    offer: resolveOffer({
+      totalMinor: fields.totalMinor,
+      discountCode: fields.discountCode,
+      declaredOffer: fields.declaredOffer,
+      launchCode: env.DODO_LAUNCH_DISCOUNT_CODE ?? null,
+      freeCode: env.DODO_FREE_DISCOUNT_CODE ?? null,
+    }),
+    totalMinor: fields.totalMinor,
+    subtotalMinor: fields.subtotalMinor,
+    currency: fields.currency,
+    discountCode: fields.discountCode,
+    paymentMethod: fields.paymentMethod,
+    raw: event,
+  });
+
+  // Close the loop on the checkout row we wrote before the redirect. Without
+  // this every checkout stays `created` forever and the thanks page has no way
+  // to tell a completed purchase from an abandoned one.
+  await linkCheckout({
+    sessionId: fields.checkoutSessionId,
+    email: customer.email,
+    customerId: customer.id,
+    paymentId: payment.id,
+    completed: succeeded,
+  });
+
+  if (!succeeded) return true;
+
+  // Mirror the redemption onto our own Discount row. Dodo enforces the real cap
+  // — this is only so `GET /api/checkout/offers` can stop showing an offer that
+  // is about to start failing at the till.
+  if (firstTime && fields.discountCode) {
+    await prisma.discount.updateMany({
+      where: { code: fields.discountCode },
+      data: { timesUsed: { increment: 1 } },
+    });
+  }
+
+  // The key may already be here (grant delivered first) or may not be (payment
+  // first). Either order ends with exactly one email, because whichever handler
+  // finds both halves sends it and `deliverPurchase` is guarded on the log.
+  const key = await prisma.licenseKey.findFirst({
+    where: { customerId: customer.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (key) {
+    await prisma.licenseKey.update({ where: { id: key.id }, data: { paymentId: payment.id } });
+    await deliverPurchase({
+      email: customer.email,
+      customerId: customer.id,
+      licenseKeyId: key.id,
+      licenseKey: key.key,
+      free: payment.totalMinor === 0,
+    });
+  }
+  return true;
+}
+
+async function handleReversal(event: DodoEvent, kind: "refunded" | "disputed"): Promise<boolean> {
+  const paymentId = refundTargetFrom(event);
+  if (!paymentId) return false;
+
+  const payment = await prisma.payment.findUnique({ where: { dodoPaymentId: paymentId } });
+  // A reversal for a payment we never recorded is not an error — it is a
+  // payment whose `succeeded` webhook has not landed yet, or one from before
+  // this system existed. Acknowledge it rather than looping on a 500.
+  if (!payment) return false;
+
+  await prisma.payment.update({
+    where: { id: payment.id },
+    data: {
+      status: kind,
+      refundedAt: kind === "refunded" ? new Date() : payment.refundedAt,
+    },
+  });
+
+  // A reversed key stops validating, which is what the desktop app's seven-day
+  // offline grace is sized against.
+  await prisma.licenseKey.updateMany({
+    where: { paymentId: payment.id },
+    data: { status: "revoked" },
+  });
+  return true;
+}
+
+async function handleLicenseKey(event: DodoEvent): Promise<boolean> {
+  const who = customerFrom(event);
+  const fields = licenseKeyFrom(event);
+  if (!who || !fields) return false;
+
+  const customer = await upsertCustomer(who);
+
+  const stored = await recordLicenseKey({
+    key: fields.key,
+    dodoLicenseKeyId: fields.dodoLicenseKeyId,
+    customerId: customer.id,
+    activationsLimit: fields.activationsLimit,
+    activationsUsed: fields.activationsUsed,
+    expiresAt: fields.expiresAt,
+  });
+
+  const grantStatus = grantStatusFor(event.type);
+  if (fields.grantId && grantStatus) {
+    const delivered = grantStatus === "delivered";
+    await prisma.entitlementGrant.upsert({
+      where: { dodoGrantId: fields.grantId },
+      create: {
+        dodoGrantId: fields.grantId,
+        status: grantStatus,
+        customerId: customer.id,
+        licenseKeyId: stored.id,
+        deliveredAt: delivered ? new Date() : null,
+        raw: event as never,
+      },
+      // A `created` arriving after a `delivered` must not walk the status back.
+      update: {
+        status: delivered ? "delivered" : undefined,
+        licenseKeyId: stored.id,
+        deliveredAt: delivered ? new Date() : undefined,
+      },
+    });
+  }
+
+  const payment = await prisma.payment.findFirst({
+    where: { customerId: customer.id, status: "succeeded" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Only mail once the payment is known, so a free claim is labelled correctly
+  // in the subject line rather than guessed at.
+  if (payment) {
+    if (!stored.paymentId) {
+      await prisma.licenseKey.update({
+        where: { id: stored.id },
+        data: { paymentId: payment.id },
+      });
+    }
+    await deliverPurchase({
+      email: customer.email,
+      customerId: customer.id,
+      licenseKeyId: stored.id,
+      licenseKey: stored.key,
+      free: payment.totalMinor === 0,
+    });
+  }
+  return true;
+}
+
+async function handleRevocation(event: DodoEvent): Promise<boolean> {
+  const key = revokedKeyFrom(event);
+  if (!key) return false;
+
+  const updated = await prisma.licenseKey.updateMany({
+    where: { key },
+    data: { status: "revoked" },
+  });
+
+  if (event.type === "entitlement_grant.revoked") {
+    const grantId =
+      typeof event.data.grant_id === "string"
+        ? event.data.grant_id
+        : typeof event.data.id === "string"
+          ? event.data.id
+          : null;
+    if (grantId) {
+      await prisma.entitlementGrant.updateMany({
+        where: { dodoGrantId: grantId },
+        data: { status: "revoked", revokedAt: new Date() },
+      });
+    }
+  }
+
+  return updated.count > 0;
+}
+
+/**
+ * Attach a payment to the checkout that produced it.
+ *
+ * Dodo does not always echo the session id on the payment, so there is a
+ * fallback: the most recent unfinished checkout for the same email. That is a
+ * guess, and it is scoped tightly enough to be a safe one — same address, still
+ * `created`, and only ever used to fill a blank, never to overwrite a link we
+ * already have.
+ */
+async function linkCheckout(input: {
+  sessionId: string | null;
+  email: string;
+  customerId: string;
+  paymentId: string;
+  completed: boolean;
+}): Promise<void> {
+  const checkout = input.sessionId
+    ? await prisma.checkout.findUnique({ where: { dodoSessionId: input.sessionId } })
+    : await prisma.checkout.findFirst({
+        where: { email: input.email, status: "created", payment: null },
+        orderBy: { createdAt: "desc" },
+      });
+
+  if (!checkout) return;
+
+  await prisma.checkout.update({
+    where: { id: checkout.id },
+    data: {
+      status: input.completed ? "completed" : checkout.status,
+      completedAt: input.completed ? new Date() : checkout.completedAt,
+      customerId: checkout.customerId ?? input.customerId,
+    },
+  });
+
+  // The payment owns the relation (`checkoutId` is unique there), so the link
+  // is written from that side. A second payment against the same session would
+  // violate the unique index — which is correct, and is why this is guarded.
+  const alreadyLinked = await prisma.payment.findUnique({
+    where: { checkoutId: checkout.id },
+    select: { id: true },
+  });
+  if (alreadyLinked) return;
+
+  await prisma.payment.update({
+    where: { id: input.paymentId },
+    data: { checkoutId: checkout.id },
+  });
 }

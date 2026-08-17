@@ -2,6 +2,7 @@ import { DOWNLOAD_TOKEN_USES } from "@contextjule/core/downloads";
 import prisma from "@contextjule/db";
 import { env } from "@contextjule/env/server";
 
+import type { Offer } from "../lib/dodo-payload";
 import { purchaseEmail, sendEmail } from "../lib/email";
 import { mintDownloadToken } from "../lib/tokens";
 
@@ -43,6 +44,7 @@ export async function recordPayment(input: {
   dodoPaymentId: string;
   customerId: string;
   status: "pending" | "succeeded" | "failed" | "refunded" | "disputed";
+  offer: Offer;
   totalMinor: number;
   subtotalMinor?: number | null;
   currency?: string;
@@ -50,14 +52,13 @@ export async function recordPayment(input: {
   paymentMethod?: string | null;
   raw?: unknown;
 }) {
-  const offer = resolveOffer(input.totalMinor, input.discountCode ?? null);
   return prisma.payment.upsert({
     where: { dodoPaymentId: input.dodoPaymentId },
     create: {
       dodoPaymentId: input.dodoPaymentId,
       customerId: input.customerId,
       status: input.status,
-      offer,
+      offer: input.offer,
       totalMinor: input.totalMinor,
       subtotalMinor: input.subtotalMinor ?? null,
       currency: input.currency ?? "USD",
@@ -73,17 +74,6 @@ export async function recordPayment(input: {
       raw: (input.raw ?? null) as never,
     },
   });
-}
-
-/**
- * A free claim is a payment of zero against the free code. Keeping it in the
- * same table is deliberate: reporting, refunds and license issuance then have
- * one shape rather than two.
- */
-function resolveOffer(totalMinor: number, discountCode: string | null): "full" | "launch" | "free" {
-  if (totalMinor === 0) return "free";
-  if (discountCode && discountCode === env.DODO_LAUNCH_DISCOUNT_CODE) return "launch";
-  return "full";
 }
 
 export async function recordLicenseKey(input: {
@@ -143,6 +133,9 @@ export async function issueDownloadToken(input: {
       email: input.email.trim().toLowerCase(),
       customerId: input.customerId ?? null,
       licenseKeyId: input.licenseKeyId ?? null,
+      // Pinned to the release that was current when the link was issued, so a
+      // link from a purchase email keeps resolving to a build that the key was
+      // bought against even after a newer one ships.
       releaseId: release?.id ?? null,
       usesRemaining: DOWNLOAD_TOKEN_USES,
       expiresAt,

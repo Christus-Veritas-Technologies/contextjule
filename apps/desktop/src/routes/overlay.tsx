@@ -6,30 +6,36 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { useSettings } from "../lib/data";
+import { useWindowDrag } from "../lib/drag";
 import * as ipc from "../lib/ipc";
 import { useJule } from "../lib/jule";
 
 export const Route = createFileRoute("/overlay")({ component: Overlay });
 
-/** How often to sample the cursor when she is following it. */
 const FOLLOW_TICK_MS = 120;
 
 /**
  * Surface D — the desktop overlay, 120x160.
  *
  * A transparent window pinned above the dock. No plate, no chrome, 4x sprite
- * with a contact shadow under her feet — without that smear she reads as
- * floating over the desktop rather than standing on it.
+ * with a contact shadow — without that smear she reads as floating over the
+ * desktop rather than standing on it.
  *
  * The window covers a rectangle far larger than she is, so it starts
  * click-through and only becomes clickable while the cursor is over her body.
- * That is what lets a click land on whatever is behind her everywhere else.
+ * That is what lets a click land on whatever is behind her everywhere else, and
+ * it is why the pointer handlers here are load-bearing rather than decoration.
  */
 function Overlay() {
   const jule = useJule();
   const { settings } = useSettings();
   const nudges = useMemo(() => nudgesFromSettings(settings), [settings]);
   const [look, setLook] = useState<LookDirection | null>(null);
+
+  const drag = useWindowDrag("overlay", {
+    onStart: () => jule.react("held"),
+    onEnd: () => jule.endReaction("held"),
+  });
 
   useEffect(() => {
     document.body.dataset.surface = "overlay";
@@ -38,12 +44,10 @@ function Overlay() {
     };
   }, []);
 
-  /**
-   * Cursor-follow. Off by default, and only while she is standing still —
-   * turning her head mid-animation would fight whatever pose she is holding.
-   */
+  /** Off by default, and only while she is standing still — turning her head
+   *  mid-animation would fight whatever pose she is holding. */
   useEffect(() => {
-    if (!nudges.cursor || !ipc.hasHost() || jule.activity !== "idle") {
+    if (!nudges.cursor || !ipc.hasHost() || jule.activity !== "idle" || jule.reacting) {
       setLook(null);
       return;
     }
@@ -54,8 +58,7 @@ function Overlay() {
           ipc.cursorPosition(),
           ipc.surfacePosition("overlay"),
         ]);
-        if (cancelled) return;
-        setLook(directionFrom(cursor, frame));
+        if (!cancelled) setLook(directionFrom(cursor, frame));
       } catch {
         // The cursor is not worth an error state.
       }
@@ -64,7 +67,7 @@ function Overlay() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [nudges.cursor, jule.activity]);
+  }, [nudges.cursor, jule.activity, jule.reacting]);
 
   const lookGrid = useMemo(() => (look ? juleEngine().look(look) : null), [look]);
 
@@ -99,9 +102,9 @@ function Overlay() {
           grid={lookGrid ?? undefined}
           action={jule.action}
           scale={4}
-          className="cursor-pointer"
-          data-tauri-drag-region
+          className="cursor-grab active:cursor-grabbing"
           onClick={jule.boop}
+          {...drag}
         />
         <Sprite
           grid={contactShadow}

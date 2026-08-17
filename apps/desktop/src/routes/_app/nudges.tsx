@@ -1,9 +1,12 @@
 import { DEFAULT_NUDGES } from "@contextjule/core";
 import { ToggleRow } from "@contextjule/ui/components/rows";
 import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
 
 import { LicenseCard } from "../../components/license-card";
+import { SourcesCard } from "../../components/sources-card";
 import { useSettings } from "../../lib/data";
+import * as ipc from "../../lib/ipc";
 
 export const Route = createFileRoute("/_app/nudges")({ component: Nudges });
 
@@ -16,18 +19,38 @@ const NUDGES = [
   { id: "sleep", name: "Overnight sleep", note: "Curls up after 30 idle minutes" },
 ] as const;
 
+/** The surfaces someone can leave open. `main` is not one — it always opens. */
+const SURFACES = [
+  { id: "mini-bar" as const, name: "Mini bar", note: "Always on top, snaps to the screen edge" },
+  { id: "overlay" as const, name: "On the desktop", note: "Transparent, click-through except on her" },
+  { id: "panel" as const, name: "Panel", note: "The compact window, without the tabs" },
+];
+
 /**
  * 03 nudges — when she speaks up, and the app's only settings surface.
  *
- * Each switch writes straight to the local store, so it survives a restart, and
- * the behaviour engine reads the same keys — flipping one changes what she does
- * on the next tick, in every window at once.
- *
- * The privacy line is pinned to the bottom because it is the thing people check
- * first, and it is the one line in the app that has to be literally true.
+ * Every switch writes through to somewhere that survives a restart: the nudges
+ * and surfaces to the local store, autostart to the operating system's own
+ * login items. Nothing here is component state — a preference that forgets
+ * itself is worse than no preference.
  */
 function Nudges() {
   const { bool, set } = useSettings();
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
+
+  // Autostart is read from the OS rather than mirrored into our settings, so a
+  // user who removes it from their own login items sees that reflected here.
+  const refresh = useCallback(() => {
+    void ipc.autostartEnabled().then(setAutostart);
+    for (const surface of SURFACES) {
+      void ipc
+        .surfaceVisible(surface.id)
+        .then((open) => setVisible((current) => ({ ...current, [surface.id]: open })));
+    }
+  }, []);
+
+  useEffect(refresh, [refresh]);
 
   return (
     <div
@@ -46,6 +69,33 @@ function Nudges() {
           onCheckedChange={(on) => void set(`nudges.${nudge.id}`, String(on))}
         />
       ))}
+
+      <span className="mt-1 font-pixel text-[10px] text-[#14567e]">where she lives</span>
+
+      {SURFACES.map((surface) => (
+        <ToggleRow
+          key={surface.id}
+          name={surface.name}
+          note={surface.note}
+          checked={visible[surface.id] ?? false}
+          onCheckedChange={(on) => {
+            setVisible((current) => ({ ...current, [surface.id]: on }));
+            void ipc.surfaceSetVisible(surface.id, on);
+          }}
+        />
+      ))}
+
+      <ToggleRow
+        name="Start with the machine"
+        note="She is waiting when you sit down"
+        checked={autostart ?? false}
+        onCheckedChange={(on) => {
+          setAutostart(on);
+          void ipc.autostartSet(on).then(refresh);
+        }}
+      />
+
+      <SourcesCard />
 
       <LicenseCard />
 

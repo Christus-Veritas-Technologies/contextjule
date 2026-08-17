@@ -3,6 +3,8 @@ import { TitleBar } from "@contextjule/ui/components/window-frame";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 
 import { Activate } from "../components/activate";
+import { Onboarding } from "../components/onboarding";
+import { useSettings } from "../lib/data";
 import * as ipc from "../lib/ipc";
 import { useLicense } from "../lib/license";
 import { appWindow } from "../lib/window";
@@ -13,18 +15,28 @@ import { appWindow } from "../lib/window";
  * four-tab strip along the bottom with the active tab in gold.
  *
  * Tauri's native decorations are off, so this chrome *is* the window — which is
- * why the title bar carries the drag region. Closing hides into the tray, which
- * is safe now that the tray exists to restore it; Rust intercepts the native
- * close for the same reason.
+ * why the title bar carries the drag region. Closing hides into the tray, and
+ * Rust intercepts the native close for the same reason.
+ *
+ * Three gates in order: the licence, then onboarding, then the app. Onboarding
+ * comes second on purpose — there is no point explaining what she watches to
+ * someone who cannot get in yet.
  */
 export const Route = createFileRoute("/_app")({
   component: AppShell,
 });
 
+const ONBOARDED = "onboarding.done";
+
 function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const active = pathname === "/" ? "home" : pathname.replace(/^\//, "");
   const { unlocked, loading } = useLicense();
+  const { bool, set, loading: settingsLoading } = useSettings();
+
+  const onboarded = bool(ONBOARDED, false);
+  const ready = !loading && !settingsLoading;
+  const showTabs = ready && unlocked && onboarded;
 
   return (
     <div className="flex h-svh flex-col overflow-hidden border-3 border-ink bg-cream">
@@ -36,12 +48,19 @@ function AppShell() {
       />
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {/* No spinner. The licence read is a local file and resolves in a
-            frame or two; a flash of loading chrome would be the slowest part. */}
-        {loading ? null : unlocked ? <Outlet /> : <Activate />}
+        {/* No spinner. The licence and settings are local reads that resolve in
+            a frame or two; a flash of loading chrome would be the slowest part
+            of opening the app. */}
+        {!ready ? null : !unlocked ? (
+          <Activate />
+        ) : !onboarded ? (
+          <Onboarding onDone={() => void set(ONBOARDED, "true")} />
+        ) : (
+          <Outlet />
+        )}
       </div>
 
-      {unlocked ? (
+      {showTabs ? (
         <nav className="flex border-t-3 border-ink bg-ink-soft">
           {TABS.map((tab) => (
             <Link

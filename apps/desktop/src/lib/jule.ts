@@ -1,10 +1,15 @@
 "use client";
 
 import {
+  type ActiveReaction,
   type JuleOutput,
   type JuleSpeech,
+  type ReactionId,
   decideJule,
+  loadStateFor,
   nudgesFromSettings,
+  REACTION_SPECS,
+  shouldReplace,
   SPEECH_TIMING,
 } from "@contextjule/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -41,6 +46,10 @@ export interface JuleController extends JuleOutput {
   windowSize: number;
   cleanse: () => Promise<void>;
   boop: () => void;
+  /** Play a reaction. Higher-priority ones interrupt whatever is running. */
+  react: (id: ReactionId) => void;
+  /** Stop a sustained reaction — drag ended, wardrobe closed. */
+  endReaction: (id: ReactionId) => void;
   dismissSpeech: () => void;
 }
 
@@ -51,6 +60,7 @@ export function useJule(): JuleController {
   const [now, setNow] = useState(() => Date.now());
   const [cleansedAt, setCleansedAt] = useState<number | null>(null);
   const [speaking, setSpeaking] = useState<JuleSpeech | null>(null);
+  const [reaction, setReaction] = useState<ActiveReaction | null>(null);
 
   // Said-once bookkeeping. Refs rather than state: changing them must not
   // re-render, or announcing something would immediately re-announce it.
@@ -59,6 +69,8 @@ export function useJule(): JuleController {
   const openedAt = useRef(Date.now());
   const lastActivityAt = useRef(Date.now());
   const lastLoad = useRef<string | null>(null);
+  /** Previous load state, so a collapse is recorded on the crossing only. */
+  const previousLoad = useRef<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -107,10 +119,44 @@ export function useJule(): JuleController {
         warnedAt: warnedAt.current,
         hydratedAt: hydratedAt.current,
         justOpened: now - openedAt.current < RITUAL_WINDOW_MS,
+        reaction,
         nudges,
       }),
-    [now, tokens, windowSize, session, live, cleansedAt, nudges],
+    [now, tokens, windowSize, session, live, cleansedAt, reaction, nudges],
   );
+
+  const react = useCallback((id: ReactionId) => {
+    lastActivityAt.current = Date.now();
+    setReaction((current) =>
+      shouldReplace(current, id, Date.now()) ? { id, startedAt: Date.now() } : current,
+    );
+  }, []);
+
+  const endReaction = useCallback((id: ReactionId) => {
+    setReaction((current) => (current?.id === id ? null : current));
+  }, []);
+
+  // Clear a finished one-shot so the next tick falls back to her resting pose.
+  useEffect(() => {
+    if (!reaction) return;
+    const spec = REACTION_SPECS[reaction.id];
+    if (spec.sustained) return;
+    const remaining = spec.durationMs - (Date.now() - reaction.startedAt);
+    const id = setTimeout(() => setReaction(null), Math.max(0, remaining));
+    return () => clearTimeout(id);
+  }, [reaction]);
+
+  // Crossing into crashed is worth recording once, and worth watching happen.
+  useEffect(() => {
+    if (tokens === null || !session) return;
+    const current = loadStateFor(tokens);
+    const previous = previousLoad.current;
+    previousLoad.current = current;
+    if (previous && previous !== "crashed" && current === "crashed") {
+      react("crash");
+      void ipc.sessionCollapse(session.id, tokens);
+    }
+  }, [tokens, session, react]);
 
   // Raise anything new she has to say, and record it so it is said once.
   useEffect(() => {
@@ -142,14 +188,16 @@ export function useJule(): JuleController {
     if (!session) return;
     setCleansedAt(Date.now());
     lastActivityAt.current = Date.now();
+    react("dump");
     await ipc.sessionCleanse(session.id);
     reload();
-  }, [session, reload]);
+  }, [session, reload, react]);
 
   const boop = useCallback(() => {
     lastActivityAt.current = Date.now();
+    react("boop");
     void ipc.eventRecord("boop", session?.id);
-  }, [session]);
+  }, [session, react]);
 
   return {
     ...output,
@@ -160,6 +208,8 @@ export function useJule(): JuleController {
     windowSize,
     cleanse,
     boop,
+    react,
+    endReaction,
     dismissSpeech: () => setSpeaking(null),
   };
 }
