@@ -10,8 +10,10 @@
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
+    "@contextjule/core": "workspace:*",
     "@contextjule/db": "workspace:*",
     "@contextjule/env": "workspace:*",
+    "dodopayments": "^2.46.0",
     "dotenv": "catalog:",
     "hono": "^4.12.32",
     "zod": "catalog:"
