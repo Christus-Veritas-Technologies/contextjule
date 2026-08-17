@@ -131,12 +131,20 @@ Environment lives in `apps/server/.env` and `apps/web/.env`; both have a
 
 ## Reading the context window
 
-Not built yet. `docs/adr/0001-reading-the-context-window.md` records the options
-and the decision: a pluggable source layer, shipping local CLI transcripts
+`docs/adr/0001-reading-the-context-window.md` records the options and the
+decision: a pluggable source layer, shipping local CLI transcripts
 first (exact, zero friction), then a localhost proxy for API tools, then an
 app-owned webview for browser users. Every source emits one `Reading`, which is
 the shape `store::session_upsert` already takes — so nothing above the source
 layer changes when a source is added.
+
+Built: the source layer plus two transcript readers, and the Claude Code status
+line integration. The status line is the one to prefer — Claude Code hands us
+`context_window.total_input_tokens` and `context_window_size` directly, so
+nothing is inferred and nothing internal is parsed. The transcript readers exist
+because they need no setup and can see history; their docs warn the format is
+internal, so they skip what they do not recognise and never fail a whole poll
+for one bad line.
 
 Two things are rejected outright and should not be revisited without a reason
 the ADR does not already cover: a MITM proxy with a generated root CA, and

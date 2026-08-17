@@ -3,6 +3,7 @@ import { ToggleRow } from "@contextjule/ui/components/rows";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { LicenseCard } from "../../components/license-card";
+import { SourcesCard } from "../../components/sources-card";
 import { useSettings } from "../../lib/data";
 
 export const Route = createFileRoute("/_app/nudges")({ component: Nudges });
@@ -46,6 +47,8 @@ function Nudges() {
           onCheckedChange={(on) => void set(`nudges.${nudge.id}`, String(on))}
         />
       ))}
+
+      <SourcesCard />
 
       <LicenseCard />
 
