@@ -1,39 +1,38 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "@contextjule/ui/components/sonner";
+import type { Metadata, Viewport } from "next";
 
 import "../index.css";
-import Header from "@/components/header";
-import Providers from "@/components/providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
+/**
+ * Fonts are self-hosted through @contextjule/ui rather than next/font, so the
+ * site and the desktop app render from byte-identical files. next/font would
+ * give the site its own copies and let the two drift.
+ *
+ * `data-band="night"` sets the whole marketing surface to the dark band; the
+ * sections below the hero opt into their own colours.
+ */
 export const metadata: Metadata = {
-  title: "contextjule",
-  description: "contextjule",
+  title: "ContextJule — a desktop pet that reads your AI context window",
+  description:
+    "Context length is the one number that decides whether a session is going well, and nothing shows it to you. Jule carries the weight herself, on your desktop, entirely locally.",
+  openGraph: {
+    title: "ContextJule",
+    description: "A desktop pet that reads your AI context window.",
+    type: "website",
+  },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: "#141119",
+  colorScheme: "light",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Providers>
-          <div className="grid grid-rows-[auto_1fr] h-svh">
-            <Header />
-            {children}
-          </div>
-        </Providers>
+    <html lang="en" data-band="night">
+      <body className="min-h-svh antialiased">
+        {children}
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );
