@@ -11,7 +11,7 @@ export function SiteFooter() {
   return (
     <footer className="flex flex-col items-start gap-5 border-t-3 border-[#33683a] bg-night px-5 py-7 md:flex-row md:items-center md:justify-between md:px-10">
       <span className="font-pixel text-[10px] text-[#968fa3]">
-        contextjule — a context meter with a pulse
+        contextjule — she carries it so you do not have to
       </span>
       <div className="flex flex-wrap gap-x-6 gap-y-3">
         {LINKS.map((link) => (

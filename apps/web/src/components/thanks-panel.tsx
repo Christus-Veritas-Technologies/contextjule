@@ -11,35 +11,56 @@ import { recallCheckout } from "@/lib/session";
 /**
  * The checkout return page.
  *
- * Dodo redirects back the instant the card clears, which is almost always
- * before its webhook reaches us — so the key genuinely does not exist yet when
- * this page first paints. The honest thing is to say so and keep looking, which
- * is what this does. Claiming failure in that window would send people to
- * support for something that resolves itself in four seconds.
+ * Dodo hands the licence key back on the return URL itself —
+ * `?status=succeeded&license_key=…&payment_id=…` — so in the common case the
+ * answer is already on screen before any request is made. That path is checked
+ * first and short-circuits everything else.
  *
- * The session id comes from `POST /api/checkout`, stashed in sessionStorage
- * before the redirect. Dodo's return URL query string is used when it is there,
- * but it is not relied on: what it appends varies, and a page that only works
- * when a third party sends the right parameter is a page that breaks quietly.
+ * Polling is the fallback, for the cases where it is not: a buyer who closed
+ * the tab and came back, a return URL a payment link stripped, or a status of
+ * `processing` that only resolves once the webhook lands. Dodo redirects the
+ * instant the card clears, which is almost always before its webhook reaches
+ * us, so the honest thing in that window is to say we are still waiting rather
+ * than to claim failure — that would send people to support for something that
+ * resolves itself in four seconds.
  */
 
-/** How long to keep asking before suggesting the inbox instead. */
+/** How long to keep asking before pointing at the inbox instead. */
 const GIVE_UP_AFTER_MS = 90_000;
 
-export function ThanksPanel({ sessionId: fromUrl }: { sessionId?: string }) {
+export function ThanksPanel({
+  sessionId: fromUrl,
+  licenseKey: keyFromUrl,
+  status: statusFromUrl,
+  email: emailFromUrl,
+}: {
+  sessionId?: string;
+  licenseKey?: string;
+  status?: string;
+  email?: string;
+}) {
   const [status, setStatus] = useState<CheckoutStatus | null>(null);
-  const [waiting, setWaiting] = useState(true);
+  // Seeded from the URL, so the first paint already has it when Dodo sent it.
+  const [key, setKey] = useState<string | null>(keyFromUrl ?? null);
+  const [waiting, setWaiting] = useState(!keyFromUrl);
   const [sessionId, setSessionId] = useState<string | undefined>(fromUrl);
 
+  // Dodo's own verdict, when it gave one. `succeeded` and `active` are the two
+  // it uses for a completed purchase.
+  const declaredOk = statusFromUrl === "succeeded" || statusFromUrl === "active";
+  const declaredFail = Boolean(statusFromUrl) && !declaredOk;
+
   useEffect(() => {
+    // The key is in hand. Nothing to look up.
+    if (keyFromUrl || declaredFail) return;
     if (sessionId) return;
     const stored = recallCheckout();
     if (stored) setSessionId(stored);
     else setWaiting(false);
-  }, [sessionId]);
+  }, [sessionId, keyFromUrl, declaredFail]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || keyFromUrl || declaredFail) return;
 
     let cancelled = false;
     const startedAt = Date.now();
@@ -49,11 +70,13 @@ export function ThanksPanel({ sessionId: fromUrl }: { sessionId?: string }) {
       try {
         const next = await fetchCheckoutStatus(sessionId);
         if (cancelled) return;
-        if (next) setStatus(next);
-        // Stop the moment the key is in hand — nothing after that changes.
-        if (next?.licenseKey) {
-          setWaiting(false);
-          return;
+        if (next) {
+          setStatus(next);
+          if (next.licenseKey) {
+            setKey(next.licenseKey);
+            setWaiting(false);
+            return;
+          }
         }
       } catch {
         // A failed poll is not a failed purchase. Keep trying.
@@ -72,10 +95,12 @@ export function ThanksPanel({ sessionId: fromUrl }: { sessionId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, keyFromUrl, declaredFail]);
 
-  const key = status?.licenseKey ?? null;
-  const failed = status && !status.paid && !waiting;
+  // Only ever call it a failure on evidence: Dodo said so, or we asked and were
+  // told the payment did not succeed. Never merely because we are still waiting.
+  const failed = declaredFail || (status !== null && !status.paid && !waiting && !key);
+  const email = emailFromUrl ?? status?.email ?? null;
 
   return (
     <div className="flex w-full max-w-[560px] flex-col gap-6 border-3 border-ink bg-night-raised p-6 shadow-hard-xl md:p-8">
@@ -121,20 +146,28 @@ export function ThanksPanel({ sessionId: fromUrl }: { sessionId?: string }) {
                   className={`block size-[7px] ${waiting ? "animate-pulse bg-gold" : "bg-asleep"}`}
                 />
                 <span className="font-pixel text-[10px] text-[#c9c3d4]">
-                  {waiting ? "issuing your licence key…" : "it is on its way by email"}
+                  {waiting ? "writing your key…" : "it is on its way by email"}
                 </span>
               </div>
               <p className="text-[13px] leading-[1.6] text-[#968fa3]">
                 {waiting
-                  ? "This takes a few seconds. Leave the page open and it will appear right here."
-                  : "Your key and download link are being emailed to you. If it has not arrived in a few minutes, check spam, then ask for it again on the download page."}
+                  ? "A few seconds, no more. Leave this open and it will land right here."
+                  : "Your key and download link are being emailed to you. If nothing arrives in a few minutes, check spam, then ask for it again on the download page."}
               </p>
             </div>
           )}
 
           <p className="text-[14px] leading-[1.6] text-[#a8a2b4]">
-            The same key and a download link are on their way to your inbox. Paste the key into the
-            app the first time you open it — it does not expire, and it works on your machines.
+            {email ? (
+              <>
+                A copy is on its way to <span className="text-[#c9c3d4]">{email}</span>, with your
+                download link.{" "}
+              </>
+            ) : (
+              "The same key and a download link are on their way to your inbox. "
+            )}
+            Paste the key in the first time you open her — it never expires, and it works on your
+            machines.
           </p>
 
           <Link

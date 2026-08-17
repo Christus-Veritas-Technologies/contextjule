@@ -8,9 +8,11 @@ export const dynamic = "force-dynamic";
 /**
  * The checkout return URL.
  *
- * Dodo may append a session id, a payment id, both, or neither depending on how
- * the session was created — so anything it sends is used as a hint and the
- * page's own stored id is the fallback. The panel does the polling.
+ * Dodo appends the outcome to it directly — `status`, `license_key`,
+ * `payment_id`, `email` — so in the common case everything the buyer needs is
+ * already here and the panel renders it without a single request. The session
+ * id is read too, when present, because it is what the polling fallback needs
+ * for the cases where Dodo sent no key.
  */
 export default async function Thanks({
   searchParams,
@@ -30,7 +32,12 @@ export default async function Thanks({
     <main className="flex min-h-svh flex-col bg-night">
       <SiteNav promo={promo} />
       <div className="flex flex-1 items-center justify-center px-5 py-14 md:py-20">
-        <ThanksPanel sessionId={sessionId} />
+        <ThanksPanel
+          sessionId={sessionId}
+          licenseKey={first(params.license_key)}
+          status={first(params.status)}
+          email={first(params.email)}
+        />
       </div>
       <SiteFooter />
     </main>

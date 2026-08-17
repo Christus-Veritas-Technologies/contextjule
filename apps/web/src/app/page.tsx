@@ -29,22 +29,22 @@ export default async function Home() {
         <div className="inline-flex items-center gap-2 self-start bg-ink-soft px-3 py-[7px] shadow-[3px_3px_0_rgba(34,27,44,0.35)]">
           <span aria-hidden className="block size-[8px] bg-fresh" />
           <span className="font-pixel text-[9px] text-[#e8e2d6] md:text-[10px]">
-            lives on your desktop, not in your browser
+            she lives on your desktop, not in a browser tab
           </span>
         </div>
 
         <h1 className="font-pixel text-[27px] leading-[1.24] tracking-[-0.5px] text-[#1b1526] [text-shadow:3px_3px_0_rgba(255,255,255,0.4)] sm:text-[32px] lg:text-[40px]">
-          Your context
+          Never lose
           <br />
-          window, with
+          a good session
           <br />
-          a pulse.
+          again.
         </h1>
 
-        <p className="max-w-[420px] text-[15px] leading-[1.6] font-medium text-pretty text-[#1d2c44] md:text-[16px]">
-          She watches your Claude Code and Codex sessions and carries the context for you. Light at
-          five thousand tokens, flat on the floor at a hundred and twenty thousand, asking if you
-          want to start fresh.
+        <p className="max-w-[440px] text-[15px] leading-[1.6] font-medium text-pretty text-[#1d2c44] md:text-[16px]">
+          Jule sits at the edge of your screen and quietly carries your chat for you. When it starts
+          getting heavy, she stoops — and you find out in time to save the thread, instead of after
+          you have already lost it.
         </p>
 
         <PromoCta promo={promo} size="xl" anchorId="buy" />
@@ -59,14 +59,14 @@ export default async function Home() {
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-[70px] bg-[#4f9846]" />
         <div className="relative z-[2] mx-auto flex max-w-[660px] flex-col items-center gap-6 text-center">
           <span className="font-pixel text-[11px] text-[#1f3c1c]">
-            one price, one machine, yours
+            one price, one friend, yours to keep
           </span>
           <h2 className="font-pixel text-[24px] leading-[1.28] text-[#152a12] [text-shadow:3px_3px_0_rgba(255,255,255,0.35)] md:text-[34px]">
-            Buy her once. She stays.
+            Take her home once. She stays.
           </h2>
           <p className="text-[15px] leading-[1.65] font-medium text-pretty text-[#1d3719] md:text-[16px]">
-            No subscription, no account, no telemetry. Windows and macOS, twenty animations and
-            every state above included.
+            No subscription, no account to make, nothing to remember to cancel. Windows and macOS,
+            twenty little animations, and every one of her moods above.
           </p>
           <PromoCta promo={promo} size="xl" align="center" />
         </div>
