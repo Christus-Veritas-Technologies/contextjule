@@ -9,6 +9,7 @@ import { RateLimiter, rateLimit } from "./lib/rate-limit";
 import { checkoutRoutes } from "./routes/checkout";
 import { downloadRoutes } from "./routes/downloads";
 import { licenseRoutes } from "./routes/licenses";
+import { promoRoutes } from "./routes/promo";
 import { releaseRoutes } from "./routes/releases";
 import { webhookRoutes } from "./routes/webhooks";
 
@@ -49,10 +50,18 @@ const MINUTE = 60_000;
 const checkoutLimiter = new RateLimiter(10, MINUTE);
 const licenseLimiter = new RateLimiter(30, MINUTE);
 const downloadLimiter = new RateLimiter(20, MINUTE);
+/**
+ * Generous, because an SSE connection that drops reconnects on its own every
+ * few seconds and a visitor watching the counter is doing nothing wrong. The
+ * shared poller means the database cost here is flat regardless of how many
+ * browsers are subscribed.
+ */
+const promoLimiter = new RateLimiter(90, MINUTE);
 
 app.use("/api/checkout/*", rateLimit(checkoutLimiter, clientIp));
 app.use("/api/licenses/*", rateLimit(licenseLimiter, clientIp));
 app.use("/api/downloads/*", rateLimit(downloadLimiter, clientIp));
+app.use("/api/promo/*", rateLimit(promoLimiter, clientIp));
 
 app.get("/", (c) => c.text("OK"));
 
@@ -91,6 +100,7 @@ app.get("/health", async (c) => {
 });
 
 app.route("/api/checkout", checkoutRoutes);
+app.route("/api/promo", promoRoutes);
 app.route("/api/licenses", licenseRoutes);
 app.route("/api/downloads", downloadRoutes);
 app.route("/api/releases", releaseRoutes);

@@ -1,0 +1,33 @@
+/// The launch sequence's counter.
+///
+/// One row, slug `launch`. It exists as a row rather than as a count derived
+/// from Payment for one reason: `freeClosedAt`. The 72-hour discount window
+/// starts when the hundredth free copy is claimed, and that instant has to be
+/// remembered rather than recomputed — a refund that takes the claimed count
+/// back to 99 must not reopen a giveaway that has already been announced as
+/// over, and someone who paid the launch price an hour earlier would be right
+/// to be annoyed if it did.
+///
+/// `freeClaimed` is incremented by the Dodo webhook on a succeeded free
+/// payment, never by the checkout route: a session that was created and
+/// abandoned has not taken a copy from anyone.
+model Promo {
+  id   String @id @default(cuid())
+  slug String @unique
+
+  /// How many copies are given away before the discount window opens.
+  freeLimit    Int       @default(100)
+  freeClaimed  Int       @default(0)
+  /// Set exactly once, when the count first reaches the limit. Never cleared.
+  freeClosedAt DateTime?
+
+  /// How long the launch price runs afterwards. Stored so it can be extended
+  /// without a deploy.
+  discountHours Int @default(72)
+
+  /// Whether the sequence is running at all. Off means list price, always.
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

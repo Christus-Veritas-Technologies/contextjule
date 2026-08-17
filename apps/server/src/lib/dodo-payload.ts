@@ -173,31 +173,30 @@ export function paymentFrom(event: DodoEvent): PaymentFields | null {
 /**
  * Which offer a payment came through.
  *
- * A total of zero is free, whatever anyone claimed in metadata — the amount is
- * the fact and the metadata is a hint that a client could have forged. Below
- * that, a matching launch code wins, then the client's own declaration, then
- * full price. Deciding this here rather than at the call site is what lets it
- * be tested without a Dodo account.
+ * There are no discount codes. The price of the one Dodo product is edited by
+ * hand as the launch moves through its phases — free, then $4.99, then $14.99 —
+ * which means the amount charged *is* the offer, and there is nothing else to
+ * consult. That is a simpler and more honest signal than a code: it is what the
+ * customer actually paid.
+ *
+ * `declaredOffer` is only a tiebreaker for a price we do not recognise, and
+ * only ever to label a row. It never decides what anyone is charged.
  */
 export function resolveOffer(input: {
   totalMinor: number;
-  discountCode?: string | null;
+  launchMinor: number;
+  fullMinor: number;
   declaredOffer?: Offer | null;
-  launchCode?: string | null;
-  freeCode?: string | null;
 }): Offer {
   if (input.totalMinor === 0) return "free";
+  if (input.totalMinor === input.launchMinor) return "launch";
+  if (input.totalMinor === input.fullMinor) return "full";
 
-  const code = input.discountCode?.trim().toUpperCase() ?? null;
-  const launch = input.launchCode?.trim().toUpperCase() ?? null;
-  const free = input.freeCode?.trim().toUpperCase() ?? null;
-
-  if (code && free && code === free) return "free";
-  if (code && launch && code === launch) return "launch";
-  // A non-zero total against no known code is full price, even if the client
-  // asked for a discount — the charge is what happened.
-  if (!code && input.declaredOffer === "launch") return "launch";
-  return "full";
+  // A price we have never listed. Currency conversion and rounding both land
+  // here, so trust what the page said it was selling rather than guessing from
+  // whichever listed price happens to be nearer.
+  if (input.declaredOffer && input.declaredOffer !== "free") return input.declaredOffer;
+  return input.totalMinor < input.fullMinor ? "launch" : "full";
 }
 
 // --- refunds and disputes ---------------------------------------------------

@@ -1,5 +1,5 @@
+import { PRICE } from "@contextjule/core/pricing";
 import prisma from "@contextjule/db";
-import { env } from "@contextjule/env/server";
 import { Hono } from "hono";
 
 import { dodo } from "../lib/dodo";
@@ -14,6 +14,7 @@ import {
   resolveOffer,
   revokedKeyFrom,
 } from "../lib/dodo-payload";
+import { claimFreeCopy } from "../services/promo";
 import {
   deliverPurchase,
   recordLicenseKey,
@@ -159,10 +160,9 @@ async function handlePayment(event: DodoEvent, succeeded: boolean): Promise<bool
     status: succeeded ? "succeeded" : "failed",
     offer: resolveOffer({
       totalMinor: fields.totalMinor,
-      discountCode: fields.discountCode,
+      launchMinor: PRICE.launch,
+      fullMinor: PRICE.full,
       declaredOffer: fields.declaredOffer,
-      launchCode: env.DODO_LAUNCH_DISCOUNT_CODE ?? null,
-      freeCode: env.DODO_FREE_DISCOUNT_CODE ?? null,
     }),
     totalMinor: fields.totalMinor,
     subtotalMinor: fields.subtotalMinor,
@@ -185,14 +185,12 @@ async function handlePayment(event: DodoEvent, succeeded: boolean): Promise<bool
 
   if (!succeeded) return true;
 
-  // Mirror the redemption onto our own Discount row. Dodo enforces the real cap
-  // — this is only so `GET /api/checkout/offers` can stop showing an offer that
-  // is about to start failing at the till.
-  if (firstTime && fields.discountCode) {
-    await prisma.discount.updateMany({
-      where: { code: fields.discountCode },
-      data: { timesUsed: { increment: 1 } },
-    });
+  // One free copy has actually gone out. Counted here rather than at checkout
+  // because a session that was created and abandoned has not taken a copy from
+  // anyone — and `firstTime` is what stops a webhook replay from spending
+  // someone else's place in the hundred.
+  if (firstTime && payment.totalMinor === 0) {
+    await claimFreeCopy(payment.paidAt ?? new Date());
   }
 
   // The key may already be here (grant delivered first) or may not be (payment

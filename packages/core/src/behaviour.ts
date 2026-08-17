@@ -18,6 +18,12 @@ import {
   SLEEP_AFTER_MS,
 } from "./activity";
 import { type LoadState, loadStateFor, usedFraction, WARN_AT } from "./context";
+import {
+  type ActiveReaction,
+  REACTION_SPECS,
+  reactionActive,
+  reactionSettling,
+} from "./reactions";
 import type { SpeechTone } from "./speech";
 
 /** The five switches on the nudges screen. */
@@ -65,6 +71,8 @@ export interface JuleInput {
   hydratedAt: readonly number[];
   /** True for the first few seconds after launch, for the opening ritual. */
   justOpened: boolean;
+  /** Something she just did, which outranks her resting pose while it plays. */
+  reaction: ActiveReaction | null;
   nudges: NudgeSettings;
 }
 
@@ -87,6 +95,14 @@ export interface JuleOutput {
   /** One line for the mini bar caption. */
   caption: string;
   speech: JuleSpeech | null;
+  /** True while a reaction is overriding her pose. */
+  reacting: boolean;
+  /**
+   * True in the beat after a reaction has finished but before her resting pose
+   * resumes. Callers that suppress speech or input during a reaction should
+   * treat this the same way — the movement is not over yet.
+   */
+  settling: boolean;
 }
 
 /** Typing is "recent" for this long before she stops leaning in. */
@@ -108,13 +124,31 @@ export function decideJule(input: JuleInput): JuleOutput {
   const activity = decideActivity(input, live, used, idleFor);
   const spec = ACTIVITY_SPECS[activity];
 
+  // A reaction is the only thing that outranks the load state, and only for as
+  // long as it plays. Everything else about her — the meter, the panel colour,
+  // the caption — carries on underneath it unchanged.
+  const reacting = reactionActive(input.reaction, input.now);
+
+  // The breath afterwards. Every reaction strip ends mid-motion, so cutting
+  // straight to a static load pose is a visible snap; the neutral idle loop for
+  // a beat is what makes the whole thing read as one movement.
+  const settling = !reacting && reactionSettling(input.reaction, input.now);
+
+  const action = reacting
+    ? REACTION_SPECS[input.reaction!.id].action
+    : settling
+      ? "idle"
+      : decideAction(activity, load, idleFor, input.nudges.sleep);
+
   return {
     load,
     activity,
-    action: decideAction(activity, load, idleFor, input.nudges.sleep),
+    action,
     panel: spec.panel,
     caption: live ? spec.caption : "Nothing to watch yet.",
     speech: decideSpeech(input, live, used, load),
+    reacting,
+    settling,
   };
 }
 

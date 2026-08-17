@@ -124,33 +124,32 @@ describe("paymentFrom", () => {
 });
 
 describe("resolveOffer", () => {
+  // There are no discount codes. The product's price is edited by hand as the
+  // launch moves, so the amount that cleared IS the offer.
+  const PRICES = { launchMinor: 499, fullMinor: 1499 };
+
   it("calls a zero total free whatever the metadata claims", () => {
-    expect(resolveOffer({ totalMinor: 0, declaredOffer: "full", launchCode: "LAUNCH50" })).toBe("free");
+    expect(resolveOffer({ ...PRICES, totalMinor: 0, declaredOffer: "full" })).toBe("free");
   });
 
-  it("matches the launch code case-insensitively", () => {
-    expect(resolveOffer({ totalMinor: 499, discountCode: "launch50", launchCode: "LAUNCH50" })).toBe(
-      "launch",
-    );
+  it("labels each listed price", () => {
+    expect(resolveOffer({ ...PRICES, totalMinor: 499 })).toBe("launch");
+    expect(resolveOffer({ ...PRICES, totalMinor: 1499 })).toBe("full");
   });
 
-  it("does not trust a declared offer against an unrecognised code", () => {
-    expect(
-      resolveOffer({ totalMinor: 999, discountCode: "SOMETHINGELSE", declaredOffer: "launch" }),
-    ).toBe("full");
+  it("trusts what the page said it was selling for a price we never listed", () => {
+    // Currency conversion and rounding both land here.
+    expect(resolveOffer({ ...PRICES, totalMinor: 512, declaredOffer: "launch" })).toBe("launch");
   });
 
-  it("honours a declared launch offer when no code came back at all", () => {
-    expect(resolveOffer({ totalMinor: 499, declaredOffer: "launch" })).toBe("launch");
+  it("never lets a declared 'free' label a payment that actually charged", () => {
+    // The amount is the fact; metadata is a hint a client could have forged.
+    expect(resolveOffer({ ...PRICES, totalMinor: 1499, declaredOffer: "free" })).toBe("full");
   });
 
-  it("falls back to full price with nothing to go on", () => {
-    expect(resolveOffer({ totalMinor: 999 })).toBe("full");
-  });
-
-  it("never matches a blank configured code against a blank payload code", () => {
-    // Both unset must not collapse into "equal" and mislabel a full-price sale.
-    expect(resolveOffer({ totalMinor: 999, discountCode: null, launchCode: null })).toBe("full");
+  it("guesses from the amount when nothing was declared", () => {
+    expect(resolveOffer({ ...PRICES, totalMinor: 600 })).toBe("launch");
+    expect(resolveOffer({ ...PRICES, totalMinor: 1800 })).toBe("full");
   });
 });
 

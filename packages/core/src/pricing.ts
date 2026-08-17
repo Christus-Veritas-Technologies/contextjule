@@ -1,14 +1,22 @@
 /**
- * One price, no subscription, no account. The launch price is a Dodo discount
- * code on the same product, not a second product — so paid, discounted and free
- * promotional checkouts all take one code path and all issue a license key.
+ * One price, no subscription, no account. Every offer is a discount code
+ * applied to the one product — `launch` is a percentage code and `free` is a
+ * 100% code with a usage cap — so paid, discounted and free checkouts all take
+ * one code path and all issue a license key.
+ *
+ * The launch sequence the site runs is in `promo.ts`. This file is only the
+ * money.
  */
 export const PRICE = {
-  /** Minor units, USD. */
-  full: 999,
+  /** Minor units, USD. The list price, struck through during a promotion. */
+  full: 1499,
+  /** The 72-hour price after the free copies run out. */
   launch: 499,
   currency: "USD",
 } as const;
+
+/** `67` — how much off the launch price is, rounded for display. */
+export const LAUNCH_PERCENT_OFF = Math.round(((PRICE.full - PRICE.launch) / PRICE.full) * 100);
 
 /**
  * How a checkout was reached. Every offer is a discount code applied to the one
@@ -41,7 +49,7 @@ export const OFFER_SPECS: Readonly<Record<Offer, OfferSpec>> = {
     label: "Launch price",
     amount: PRICE.launch,
     discountEnvVar: "DODO_LAUNCH_DISCOUNT_CODE",
-    note: "A capped percentage code. The struck-through price on the site.",
+    note: "A capped percentage code, live for 72 hours after the free copies run out.",
   },
   free: {
     id: "free",
