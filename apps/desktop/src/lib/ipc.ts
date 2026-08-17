@@ -85,10 +85,6 @@ export const sessionsList = (since?: number, limit?: number) =>
   call<Session[]>("sessions_list", { since: since ?? null, limit: limit ?? null }, []);
 export const sessionEnd = (id: string) => call<void>("session_end", { id }, undefined);
 export const sessionCleanse = (id: string) => call<void>("session_cleanse", { id }, undefined);
-export const sessionCollapse = (id: string, tokens: number) =>
-  call<void>("session_collapse", { id, tokens }, undefined);
-export const sessionsCloseStale = (idleForMs: number) =>
-  call<number>("sessions_close_stale", { idleForMs }, 0);
 
 /**
  * Record a session crossing into `crashed`.
@@ -109,7 +105,6 @@ export const sessionCollapse = (id: string, tokens: number) =>
  */
 export const sessionsCloseStale = (idleForMs: number) =>
   call<number>("sessions_close_stale", { idleForMs }, 0);
-
 export const eventRecord = (kind: string, sessionId?: string, tokens?: number) =>
   call<void>("event_record", { kind, sessionId: sessionId ?? null, tokens: tokens ?? null }, undefined);
 
@@ -201,10 +196,24 @@ export const surfaceHide = (label: Surface) => call<void>("surface_hide", { labe
 export const surfaceToggle = (label: Surface) => call<boolean>("surface_toggle", { label }, false);
 export const surfaceClickThrough = (label: Surface, ignore: boolean) =>
   call<void>("surface_click_through", { label, ignore }, undefined);
-export const surfaceVisible = (label: Surface) => call<boolean>("surface_visible", { label }, false);
-/** Show or hide, and remember the choice for next launch. */
+
+export const surfaceVisible = (label: Surface) =>
+  call<boolean>("surface_visible", { label }, false);
+
+/**
+ * Show or hide a surface *and remember the choice*.
+ *
+ * Distinct from `surfaceShow`/`surfaceHide`, which are momentary. This is what
+ * the nudges screen's toggles call, so a window the user turned off stays off
+ * across a restart rather than reappearing on next launch.
+ */
 export const surfaceSetVisible = (label: Surface, visible: boolean) =>
   call<void>("surface_set_visible", { label, visible }, undefined);
+
+/**
+ * Snap a window to the nearest screen edge if it is within `threshold` pixels.
+ * Called on drag release, which is the only moment it makes sense.
+ */
 export const surfaceSnap = (label: Surface, threshold = 24) =>
   call<void>("surface_snap", { label, threshold }, undefined);
 
@@ -239,31 +248,5 @@ export const cursorPosition = () => call<[number, number]>("cursor_position", un
 export const surfacePosition = (label: Surface) =>
   call<[number, number, number, number]>("surface_position", { label }, [0, 0, 0, 0]);
 
-export const surfaceVisible = (label: Surface) =>
-  call<boolean>("surface_visible", { label }, false);
-
-/**
- * Show or hide a surface *and remember the choice*.
- *
- * Distinct from `surfaceShow`/`surfaceHide`, which are momentary. This is what
- * the nudges screen's toggles call, so a window the user turned off stays off
- * across a restart rather than reappearing on next launch.
- */
-export const surfaceSetVisible = (label: Surface, visible: boolean) =>
-  call<void>("surface_set_visible", { label, visible }, undefined);
-
-/**
- * Snap a window to the nearest screen edge if it is within `threshold` pixels.
- * Called on drag release, which is the only moment it makes sense.
- */
-export const surfaceSnap = (label: Surface, threshold = 24) =>
-  call<void>("surface_snap", { label, threshold }, undefined);
-
 /** Sets the tray badge and broadcasts to the other windows. */
 export const setLoadState = (state: string) => call<void>("set_load_state", { state }, undefined);
-
-// ── start with the machine ──────────────────────────────────────────────────
-
-export const autostartEnabled = () => call<boolean>("autostart_enabled", undefined, false);
-export const autostartSet = (enabled: boolean) =>
-  call<void>("autostart_set", { enabled }, undefined);
