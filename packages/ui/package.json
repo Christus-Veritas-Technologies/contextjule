@@ -7,6 +7,8 @@
     "./globals.css": "./src/styles/globals.css",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
+    "./jule/*": "./src/jule/*.ts",
+    "./jule": "./src/jule/index.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./postcss.config": "./postcss.config.mjs"
   },
@@ -15,11 +17,13 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@contextjule/core": "workspace:*",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@fontsource/silkscreen": "^5.3.0",
     "@shadcn/react": "^0.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "catalog:",
-    "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "^4.16.0",

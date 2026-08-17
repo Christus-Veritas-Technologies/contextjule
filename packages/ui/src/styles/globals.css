@@ -1,130 +1,356 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@source "../../../apps/**/*.{ts,tsx}";
+
+/* Silkscreen for all UI type, Space Grotesk for body copy. Self-hosted so the
+   Tauri app renders identically with no network. */
+@import "@fontsource/silkscreen/400.css";
+@import "@fontsource/silkscreen/700.css";
+@import "@fontsource-variable/space-grotesk/wght.css";
+
+@source "../../../../apps/**/*.{ts,tsx}";
+@source "../../../core/src/**/*.ts";
 @source "../**/*.{ts,tsx}";
 
-@custom-variant dark (&:is(.dark *));
+/* ---------------------------------------------------------------------------
+   ContextJule has one theme. The palette is fixed pixel art — there is no dark
+   variant, and inventing one would put colours on screen the sprite engine
+   cannot draw. What varies instead is the BAND: each screen sits on exactly one
+   surface, and `data-band` re-tones every primitive on it.
+
+       (default)          cream   app chrome, home tray, sessions
+       data-band="sky"    sky     nudges, tray flyout
+       data-band="dusk"   dusk    growth
+       data-band="night"  night   marketing site, design sheets
+
+   Design rules that hold everywhere, from designs/README.md:
+     - Gold #f0b13f is the only primary. It appears once per screen.
+     - Every border is 3px solid #17121f or #221b2c.
+     - Every shadow is a hard offset. Never a blur, never a glow.
+     - Nothing is rounded.
+     - No gradients except the sky and grass scene.
+--------------------------------------------------------------------------- */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* --- the fixed brand constants ------------------------------------------ */
+  --jule-gold: #f0b13f;
+  --jule-gold-hover: #ffd07a;
+  --jule-gold-bright: #ffc861;
+  --jule-gold-deep: #c9a227;
+
+  --jule-ink: #17121f;
+  --jule-ink-soft: #221b2c;
+
+  --jule-fresh: #7bbf6a;
+  --jule-loaded: #f0b13f;
+  --jule-heavy: #e08a3a;
+  --jule-crashed: #e04a4a;
+  --jule-crashed-deep: #8f2018;
+  --jule-asleep: #6a6478;
+
+  --jule-cream: #fdf6ea;
+  --jule-cream-raised: #fffdf8;
+  --jule-cream-speech: #fff9f2;
+  --jule-cream-rule: #e4d3b8;
+  --jule-cream-border: #d9c4a4;
+
+  --jule-sky: #dff2fb;
+  --jule-sky-deep: #b9e4f6;
+  --jule-sky-ink: #12283d;
+
+  --jule-dusk: #2b2242;
+  --jule-dusk-top: #3a2f56;
+  --jule-dusk-bottom: #241d38;
+
+  --jule-night: #141119;
+  --jule-night-raised: #1c1924;
+  --jule-night-rule: #2c2736;
+
+  /* Scene stops. The one place a gradient is allowed. */
+  --scene-sky-top: #3d8fc4;
+  --scene-sky-mid: #5fbcec;
+  --scene-sky-low: #9adcf3;
+  --scene-grass: #5aa84f;
+  --scene-grass-lip: #6dbd5e;
+  --scene-grass-shade: #4f9846;
+
+  /* Meter */
+  --meter-empty: #dbe6ef;
+
+  /* --- shadcn's contract, mapped onto the cream band ---------------------- */
+  --background: var(--jule-cream);
+  --foreground: #231b12;
+  --card: var(--jule-cream-raised);
+  --card-foreground: #231b12;
+  --popover: var(--jule-cream-speech);
+  --popover-foreground: #221b2c;
+  --primary: var(--jule-gold);
+  --primary-foreground: #221b2c;
+  --secondary: #e8e2d6;
+  --secondary-foreground: #221b2c;
+  --muted: var(--jule-cream-rule);
+  --muted-foreground: #6b5b48;
+  --accent: #f6ead6;
+  --accent-foreground: #221b2c;
+  --destructive: var(--jule-crashed);
+  --destructive-foreground: #fff9f2;
+  --border: var(--jule-ink-soft);
+  --input: var(--jule-cream-border);
+  --ring: var(--jule-gold);
+
+  /* The hard-offset shadow colour for the current band. */
+  --chrome-shadow: var(--jule-ink-soft);
+  --chrome-shadow-soft: var(--jule-cream-border);
+
+  /* Nothing is rounded. This is load-bearing — shadcn primitives read it. */
+  --radius: 0px;
+
+  /* The state ramp, reused by charts so a graph cannot invent a colour. */
+  --chart-1: var(--jule-fresh);
+  --chart-2: var(--jule-loaded);
+  --chart-3: var(--jule-heavy);
+  --chart-4: var(--jule-crashed);
+  --chart-5: var(--jule-asleep);
+
+  --sidebar: var(--jule-ink-soft);
+  --sidebar-foreground: #e8e2d6;
+  --sidebar-primary: var(--jule-gold);
+  --sidebar-primary-foreground: #221b2c;
+  --sidebar-accent: #3d3150;
+  --sidebar-accent-foreground: #e8e2d6;
+  --sidebar-border: var(--jule-ink);
+  --sidebar-ring: var(--jule-gold);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.87 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* The nudges band: sky blue, ink is navy, shadows are a navy wash. */
+[data-band="sky"] {
+  --background: var(--jule-sky);
+  --foreground: var(--jule-sky-ink);
+  --card: var(--jule-cream-raised);
+  --card-foreground: var(--jule-sky-ink);
+  --popover: var(--jule-cream-raised);
+  --popover-foreground: var(--jule-sky-ink);
+  --secondary: var(--jule-sky-deep);
+  --secondary-foreground: var(--jule-sky-ink);
+  --muted: #c2cdd6;
+  --muted-foreground: #5b6b7c;
+  --accent: var(--jule-sky-deep);
+  --accent-foreground: var(--jule-sky-ink);
+  --border: var(--jule-sky-ink);
+  --input: #9fbdd4;
+  --chrome-shadow: rgb(18 40 61 / 0.28);
+  --chrome-shadow-soft: rgb(18 40 61 / 0.18);
+}
+
+/* The growth band: dusk purple, the only screen that looks backwards. */
+[data-band="dusk"] {
+  --background: var(--jule-dusk);
+  --foreground: #e6dff5;
+  --card: var(--jule-dusk);
+  --card-foreground: #e6dff5;
+  --popover: var(--jule-dusk-top);
+  --popover-foreground: #e6dff5;
+  --secondary: #463869;
+  --secondary-foreground: #e6dff5;
+  --muted: #3d3150;
+  --muted-foreground: #bdb0d8;
+  --accent: #5b4a7f;
+  --accent-foreground: #e6dff5;
+  --primary-foreground: #221b2c;
+  --border: var(--jule-ink);
+  --input: #4a4458;
+  --chrome-shadow: var(--jule-ink);
+  --chrome-shadow-soft: rgb(23 18 31 / 0.5);
+}
+
+/* The marketing site and the design sheets. */
+[data-band="night"] {
+  --background: var(--jule-night);
+  --foreground: #f4efe9;
+  --card: var(--jule-night-raised);
+  --card-foreground: #f4efe9;
+  --popover: var(--jule-night-raised);
+  --popover-foreground: #f4efe9;
+  --secondary: #241f2f;
+  --secondary-foreground: #f4efe9;
+  --muted: var(--jule-night-rule);
+  --muted-foreground: #968fa3;
+  --accent: #322b40;
+  --accent-foreground: #f4efe9;
+  --border: var(--jule-night-rule);
+  --input: #3a3348;
+  --chrome-shadow: rgb(0 0 0 / 0.45);
+  --chrome-shadow-soft: rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
+  /* Silkscreen is the UI voice; Space Grotesk carries body copy. */
+  --font-sans: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --font-pixel: "Silkscreen", ui-monospace, monospace;
+  --font-mono: "Silkscreen", ui-monospace, monospace;
+
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Brand colours, addressable directly when a primitive is not the right tool. */
+  --color-gold: var(--jule-gold);
+  --color-gold-hover: var(--jule-gold-hover);
+  --color-gold-bright: var(--jule-gold-bright);
+  --color-gold-deep: var(--jule-gold-deep);
+  --color-ink: var(--jule-ink);
+  --color-ink-soft: var(--jule-ink-soft);
+
+  --color-fresh: var(--jule-fresh);
+  --color-loaded: var(--jule-loaded);
+  --color-heavy: var(--jule-heavy);
+  --color-crashed: var(--jule-crashed);
+  --color-crashed-deep: var(--jule-crashed-deep);
+  --color-asleep: var(--jule-asleep);
+
+  --color-cream: var(--jule-cream);
+  --color-cream-raised: var(--jule-cream-raised);
+  --color-cream-speech: var(--jule-cream-speech);
+  --color-cream-rule: var(--jule-cream-rule);
+  --color-cream-border: var(--jule-cream-border);
+  --color-sky: var(--jule-sky);
+  --color-sky-deep: var(--jule-sky-deep);
+  --color-sky-ink: var(--jule-sky-ink);
+  --color-dusk: var(--jule-dusk);
+  --color-dusk-top: var(--jule-dusk-top);
+  --color-dusk-bottom: var(--jule-dusk-bottom);
+  --color-night: var(--jule-night);
+  --color-night-raised: var(--jule-night-raised);
+  --color-night-rule: var(--jule-night-rule);
+  --color-meter-empty: var(--meter-empty);
+
+  /* Every shadow is a hard offset. There is no blurred shadow in this theme. */
+  --shadow-hard-xs: 2px 2px 0 var(--chrome-shadow);
+  --shadow-hard-sm: 3px 3px 0 var(--chrome-shadow);
+  --shadow-hard: 4px 4px 0 var(--chrome-shadow);
+  --shadow-hard-md: 5px 5px 0 var(--chrome-shadow);
+  --shadow-hard-lg: 6px 6px 0 var(--chrome-shadow);
+  --shadow-hard-xl: 9px 9px 0 var(--chrome-shadow);
+  --shadow-hard-soft: 4px 4px 0 var(--chrome-shadow-soft);
+  --shadow-hard-soft-sm: 3px 3px 0 var(--chrome-shadow-soft);
+
+  /* shadcn reads these. Every one resolves to a square corner. */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+
+  /* Surface sizes, so a window and its mock cannot drift apart. */
+  --spacing-panel-w: 320px;
+  --spacing-panel-h: 450px;
+  --spacing-bar-w: 300px;
+  --spacing-bar-h: 86px;
+  --spacing-flyout-w: 280px;
+  --spacing-screen-w: 420px;
+  --spacing-screen-h: 600px;
+}
+
+/* --- utilities the design rules need and Tailwind does not ship ----------- */
+
+/** Every border is 3px. */
+@utility border-3 {
+  border-width: 3px;
+}
+@utility border-t-3 {
+  border-top-width: 3px;
+}
+@utility border-b-3 {
+  border-bottom-width: 3px;
+}
+@utility border-l-3 {
+  border-left-width: 3px;
+}
+@utility border-r-3 {
+  border-right-width: 3px;
+}
+
+/** Sprites and icon masters only ever scale by whole numbers, hard-edged. */
+@utility pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/** Silkscreen at a UI size, with the letterspacing the screens use. */
+@utility font-ui {
+  font-family: var(--font-pixel);
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+/** The three-stop sky the home scene and the site hero share. */
+@utility scene-sky {
+  background: linear-gradient(
+    var(--scene-sky-top) 0%,
+    var(--scene-sky-mid) 52%,
+    var(--scene-sky-low) 74%
+  );
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-border);
   }
-  body {
-    @apply font-sans bg-background text-foreground;
-  }
+
   html {
-    @apply font-sans;
+    font-family: var(--font-sans);
+    /* Pixel art must never be resampled by the browser's zoom or DPR handling. */
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Silkscreen has no true italic or optical sizing; keep it literal. */
+  .font-pixel,
+  [class*="font-pixel"] {
+    font-synthesis: none;
+    font-variant-ligatures: none;
+  }
+
+  ::selection {
+    background-color: var(--jule-gold);
+    color: #221b2c;
   }
 }
