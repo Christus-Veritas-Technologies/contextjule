@@ -1,0 +1,80 @@
+/// A buyer. Created from a Dodo webhook, never from an app sign-up — there is
+/// no account to make. Email is the only identity we hold.
+model Customer {
+  id             String  @id @default(cuid())
+  /// Dodo's `cus_…` id. Absent until the first webhook lands.
+  dodoCustomerId String? @unique
+  email          String  @unique
+  name           String?
+  country        String?
+
+  payments    Payment[]
+  licenseKeys LicenseKey[]
+  grants      EntitlementGrant[]
+  checkouts   Checkout[]
+  downloads   DownloadToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+/// The one product, mirrored from Dodo so a price change is auditable here.
+model Product {
+  id            String  @id @default(cuid())
+  dodoProductId String  @unique
+  slug          String  @unique
+  name          String
+  /// Minor units. 999 = $9.99.
+  priceMinor    Int
+  currency      String  @default("USD")
+  active        Boolean @default(true)
+
+  payments    Payment[]
+  licenseKeys LicenseKey[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum DiscountType {
+  percentage
+  flat
+}
+
+/// Which offer a checkout was reached through. Free is a 100% discount on the
+/// same product, not a separate SKU — so every route issues a license key and
+/// there is only ever one delivery path to protect.
+enum Offer {
+  full
+  launch
+  free
+}
+
+/// A Dodo discount code, mirrored so the cap on a free promotion can be read
+/// and displayed without a round trip.
+model Discount {
+  id             String       @id @default(cuid())
+  dodoDiscountId String?      @unique
+  code           String       @unique
+  offer          Offer
+  type           DiscountType
+  /// Basis points for `percentage` (10000 = 100%), minor units for `flat`.
+  amount         Int
+  /// Total redemptions allowed. Null means unlimited.
+  usageLimit     Int?
+  timesUsed      Int          @default(0)
+  /// Dodo's `customer_eligibility`, mirrored: any | first_time | existing.
+  eligibility    String       @default("any")
+  startsAt       DateTime?
+  expiresAt      DateTime?
+  active         Boolean      @default(true)
+
+  checkouts Checkout[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([offer, active])
+}

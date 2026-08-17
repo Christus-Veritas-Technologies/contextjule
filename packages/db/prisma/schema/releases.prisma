@@ -1,0 +1,99 @@
+enum ReleaseChannel {
+  stable
+  beta
+}
+
+enum ArtifactPlatform {
+  windows
+  macos
+}
+
+/// A shipped build. The desktop app checks this to know an update exists; the
+/// download endpoint reads it to resolve a token to the right file.
+model Release {
+  id          String         @id @default(cuid())
+  version     String
+  channel     ReleaseChannel @default(stable)
+  notes       String?
+  /// Null until it goes live, so a build can be staged before announcement.
+  publishedAt DateTime?
+  yanked      Boolean        @default(false)
+
+  artifacts ReleaseArtifact[]
+  downloads DownloadToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([version, channel])
+  @@index([channel, publishedAt])
+}
+
+/// One installer. Checksums are stored so the site can publish them and the
+/// updater can verify what it fetched.
+model ReleaseArtifact {
+  id         String           @id @default(cuid())
+  releaseId  String
+  platform   ArtifactPlatform
+  arch       String           @default("x64")
+  filename   String
+  /// Key in object storage. Never a public URL — links are signed on demand.
+  storageKey String
+  sizeBytes  Int?
+  sha256     String?
+  /// Tauri updater signature, when the artifact feeds the updater.
+  signature  String?
+
+  release Release         @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  events  DownloadEvent[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, platform, arch])
+}
+
+/// The link that lands in a purchase email.
+///
+/// It is a single-use-ish token, not a path to the file: redeeming it returns a
+/// short-lived signed URL, so a link pasted into a public channel stops working.
+/// This protects the bandwidth, not the product — the license key is what gates
+/// the app, which is why a free promotional claim can safely be emailed the same
+/// installer as a paid one.
+model DownloadToken {
+  id            String    @id @default(cuid())
+  /// SHA-256 of the token. The plaintext exists only in the customer's email.
+  tokenHash     String    @unique
+  email         String
+  customerId    String?
+  licenseKeyId  String?
+  releaseId     String?
+  usesRemaining Int       @default(2)
+  expiresAt     DateTime
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+
+  customer   Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  licenseKey LicenseKey?     @relation(fields: [licenseKeyId], references: [id], onDelete: SetNull)
+  release    Release?        @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  events     DownloadEvent[]
+
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([expiresAt])
+}
+
+/// Every redemption, so a leaked link shows up as a pattern rather than a bill.
+model DownloadEvent {
+  id         String   @id @default(cuid())
+  tokenId    String
+  artifactId String?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  token    DownloadToken    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  artifact ReleaseArtifact? @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+
+  @@index([tokenId, createdAt])
+}

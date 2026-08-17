@@ -1,0 +1,80 @@
+enum CheckoutStatus {
+  created
+  completed
+  expired
+  abandoned
+}
+
+/// One Dodo checkout session. Recorded before the redirect so an abandoned
+/// checkout is still visible, and so a free claim can be rate limited by email
+/// and IP before it ever reaches Dodo.
+model Checkout {
+  id            String         @id @default(cuid())
+  dodoSessionId String         @unique
+  status        CheckoutStatus @default(created)
+  offer         Offer          @default(full)
+  email         String?
+  customerId    String?
+  discountId    String?
+  discountCode  String?
+  /// Where the claim came from, for abuse triage on a free promotion.
+  ip            String?
+  userAgent     String?
+  checkoutUrl   String?
+  expiresAt     DateTime?
+  completedAt   DateTime?
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  discount Discount? @relation(fields: [discountId], references: [id], onDelete: SetNull)
+  payment  Payment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@index([status])
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+  disputed
+}
+
+/// A completed charge. Zero-total rows are real — a free promotional claim is a
+/// payment of 0, which keeps reporting and license issuance on one path.
+model Payment {
+  id            String        @id @default(cuid())
+  dodoPaymentId String        @unique
+  status        PaymentStatus @default(pending)
+  customerId    String
+  productId     String?
+  checkoutId    String?       @unique
+  offer         Offer         @default(full)
+  /// Minor units actually charged, after discounts.
+  totalMinor    Int
+  /// Minor units before discounts, so the saving is reportable.
+  subtotalMinor Int?
+  taxMinor      Int?
+  currency      String        @default("USD")
+  discountCode  String?
+  paymentMethod String?
+  paidAt        DateTime?
+  refundedAt    DateTime?
+  /// The webhook payload, verbatim. Never read in app code — kept for support.
+  raw           Json?
+
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  checkout    Checkout?    @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  licenseKeys LicenseKey[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+}

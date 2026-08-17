@@ -1,8 +1,16 @@
+// ContextJule's database is the payments and licensing record, not the app's
+// data. Nothing a customer's AI session contains ever reaches here: the desktop
+// app keeps sessions, token counts and settings in a local SQLite file on the
+// customer's own machine. What lives here is who bought, what they were charged,
+// which key they hold, and which machines that key is running on.
+//
+// The schema is split across files in this folder (prismaSchemaFolder).
+
 generator client {
-  provider = "prisma-client"
-  output   = "../generated"
+  provider     = "prisma-client"
+  output       = "../generated"
   moduleFormat = "esm"
-  runtime = "bun"
+  runtime      = "bun"
 }
 
 datasource db {

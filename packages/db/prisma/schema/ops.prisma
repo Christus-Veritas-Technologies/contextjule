@@ -1,0 +1,53 @@
+enum WebhookStatus {
+  received
+  processed
+  failed
+  ignored
+}
+
+/// Every Dodo webhook, keyed by its `webhook-id` header.
+///
+/// Dodo follows the Standard Webhooks spec and will retry, so delivery is
+/// at-least-once. This table is the idempotency ledger: a handler claims a
+/// webhook by inserting here, and a duplicate delivery hits the unique index
+/// and is dropped instead of issuing a second license key.
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  webhookId   String        @unique
+  type        String
+  payloadType String?
+  status      WebhookStatus @default(received)
+  attempts    Int           @default(0)
+  error       String?
+  raw         Json
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@index([type, receivedAt])
+  @@index([status])
+}
+
+enum EmailStatus {
+  queued
+  sent
+  failed
+}
+
+/// Transactional mail: the purchase email carrying the key and the download
+/// link, and the resend of it. Logged so "I never got it" is answerable.
+model EmailLog {
+  id                String      @id @default(cuid())
+  to                String
+  template          String
+  subject           String
+  status            EmailStatus @default(queued)
+  providerMessageId String?
+  error             String?
+  attempts          Int         @default(0)
+  sentAt            DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([to, createdAt])
+  @@index([status])
+}
