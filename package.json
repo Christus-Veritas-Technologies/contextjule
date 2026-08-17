@@ -12,6 +12,7 @@
     "check-types": "turbo run check-types",
     "dev:web": "turbo run dev -F web --",
     "dev:server": "turbo run dev -F server --",
+    "dev:desktop": "turbo run dev -F contextjule --",
     "db:push": "turbo run db:push -F @contextjule/db --",
     "db:studio": "turbo run db:studio -F @contextjule/db --",
     "db:generate": "turbo run db:generate -F @contextjule/db --",
