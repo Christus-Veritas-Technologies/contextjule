@@ -10,13 +10,20 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "check-types": "turbo run check-types",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "dev:web": "turbo run dev -F web --",
     "dev:server": "turbo run dev -F server --",
     "dev:desktop": "turbo run dev -F contextjule --",
     "db:push": "turbo run db:push -F @contextjule/db --",
     "db:studio": "turbo run db:studio -F @contextjule/db --",
     "db:generate": "turbo run db:generate -F @contextjule/db --",
-    "db:migrate": "turbo run db:migrate -F @contextjule/db --"
+    "db:migrate": "turbo run db:migrate -F @contextjule/db --",
+    "db:seed": "turbo run db:seed -F @contextjule/db --",
+    "sync:sprite": "node scripts/sync-sprite.mjs",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down"
   },
   "dependencies": {
     "@contextjule/env": "workspace:*",
@@ -24,6 +31,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
     "@contextjule/config": "workspace:*",
     "@types/bun": "catalog:",
     "turbo": "^2.10.7",
