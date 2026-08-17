@@ -1,28 +1,34 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+/* The whole design system, tokens and self-hosted fonts included. Nothing here
+   is fetched at runtime, which is the point — the app has to render identically
+   with the network off. */
+@import "@contextjule/ui/globals.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
-nav {
-  display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+body {
+  /* The window chrome is ours, so nothing is selectable or draggable except the
+     parts that say they are. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  background: var(--jule-cream);
 }
 
-nav a {
-  color: inherit;
-  text-decoration: none;
-  font-weight: 600;
+/* The overlay window has no plate behind her at all — the desktop shows through.
+   Set from the route, so nothing else has to know about routing. */
+body[data-surface="overlay"] {
+  background: transparent;
 }
 
-nav a.active {
-  color: #646cff;
-}
-
-main {
-  padding: 1rem;
+/* Anything the user is meant to be able to select opts back in. */
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }

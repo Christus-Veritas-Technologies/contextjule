@@ -6,24 +6,28 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:frontend": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
     "tauri": "tauri"
   },
   "dependencies": {
+    "@contextjule/core": "workspace:*",
+    "@contextjule/ui": "workspace:*",
+    "@tanstack/react-router": "^1.170.29",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
-    "@tanstack/react-router": "^1.170.29",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "^1.168.32",
+    "@tauri-apps/cli": "^2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "^7.0.4"
   }
