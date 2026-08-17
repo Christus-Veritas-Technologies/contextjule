@@ -1,0 +1,110 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ContextJule",
+  "version": "0.1.0",
+  "identifier": "com.contextjule.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev:frontend",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "url": "/",
+        "title": "ContextJule",
+        "width": 420,
+        "height": 600,
+        "minWidth": 420,
+        "minHeight": 600,
+        "resizable": false,
+        "decorations": false,
+        "center": true
+      },
+      {
+        "label": "panel",
+        "url": "/panel",
+        "title": "ContextJule",
+        "width": 320,
+        "height": 450,
+        "minWidth": 320,
+        "maxWidth": 380,
+        "minHeight": 450,
+        "resizable": true,
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true
+      },
+      {
+        "label": "mini-bar",
+        "url": "/mini-bar",
+        "title": "ContextJule",
+        "width": 300,
+        "height": 86,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
+      },
+      {
+        "label": "tray-flyout",
+        "url": "/tray",
+        "title": "ContextJule",
+        "width": 280,
+        "height": 132,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
+      },
+      {
+        "label": "overlay",
+        "url": "/overlay",
+        "title": "ContextJule",
+        "width": 120,
+        "height": 160,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://test.dodopayments.com https://live.dodopayments.com"
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/tray/tray-idle.png",
+      "iconAsTemplate": true,
+      "tooltip": "ContextJule"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "app"],
+    "publisher": "Christus Veritas Technologies",
+    "copyright": "© Christus Veritas Technologies",
+    "category": "Productivity",
+    "shortDescription": "A desktop pet that reads your AI context window.",
+    "longDescription": "Jule lives on your desktop, watches how much context your session is carrying, and visibly carries the weight herself. Everything runs locally: no session text ever leaves the machine.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["icons/tray/*"],
+    "windows": { "allowDowngrades": false },
+    "macOS": { "minimumSystemVersion": "10.15" }
+  }
+}

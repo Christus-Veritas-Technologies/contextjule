@@ -1,0 +1,406 @@
+{
+  "frame": {
+    "width": 30,
+    "height": 40,
+    "origin": "bottom-centre",
+    "transparent": true
+  },
+  "scales": {
+    "1x": "jule_<id>.png",
+    "2x": "jule_<id>-2x.png"
+  },
+  "note": "Every strip is one row of frames, left to right. Slice at frame.width intervals. Scale with nearest-neighbour only.",
+  "actions": [
+    {
+      "id": "idle",
+      "label": "Idle",
+      "use": "Default loop",
+      "frames": 8,
+      "fps": 8,
+      "loop": true,
+      "file": "actions/jule_idle.png"
+    },
+    {
+      "id": "wave",
+      "label": "Wave",
+      "use": "App launch and quit",
+      "frames": 12,
+      "fps": 12,
+      "loop": false,
+      "file": "actions/jule_wave.png"
+    },
+    {
+      "id": "walk",
+      "label": "Walk",
+      "use": "Crossing the screen, drag",
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "file": "actions/jule_walk.png"
+    },
+    {
+      "id": "listen",
+      "label": "Listening",
+      "use": "User is typing",
+      "frames": 8,
+      "fps": 8,
+      "loop": true,
+      "file": "actions/jule_listen.png"
+    },
+    {
+      "id": "think",
+      "label": "Thinking",
+      "use": "Model is generating",
+      "frames": 12,
+      "fps": 10,
+      "loop": true,
+      "file": "actions/jule_think.png"
+    },
+    {
+      "id": "type",
+      "label": "Typing along",
+      "use": "Tokens streaming in",
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "file": "actions/jule_type.png"
+    },
+    {
+      "id": "cheer",
+      "label": "Cheer",
+      "use": "Task done, chest opened",
+      "frames": 12,
+      "fps": 12,
+      "loop": false,
+      "file": "actions/jule_cheer.png"
+    },
+    {
+      "id": "catch",
+      "label": "Catch",
+      "use": "File dropped on window",
+      "frames": 12,
+      "fps": 12,
+      "loop": false,
+      "file": "actions/jule_catch.png"
+    },
+    {
+      "id": "zap",
+      "label": "Overload",
+      "use": "Context near ceiling",
+      "frames": 12,
+      "fps": 12,
+      "loop": true,
+      "file": "actions/jule_zap.png"
+    },
+    {
+      "id": "crash",
+      "label": "Collapse",
+      "use": "Context full",
+      "frames": 12,
+      "fps": 10,
+      "loop": false,
+      "file": "actions/jule_crash.png"
+    },
+    {
+      "id": "sweep",
+      "label": "Sweep",
+      "use": "Context cleared",
+      "frames": 12,
+      "fps": 12,
+      "loop": false,
+      "file": "actions/jule_sweep.png"
+    },
+    {
+      "id": "sip",
+      "label": "Sip",
+      "use": "Long idle, between turns",
+      "frames": 12,
+      "fps": 8,
+      "loop": false,
+      "file": "actions/jule_sip.png"
+    },
+    {
+      "id": "stretch",
+      "label": "Stretch",
+      "use": "Wake from sleep",
+      "frames": 12,
+      "fps": 10,
+      "loop": false,
+      "file": "actions/jule_stretch.png"
+    },
+    {
+      "id": "nap",
+      "label": "Nap",
+      "use": "Idle timeout",
+      "frames": 8,
+      "fps": 6,
+      "loop": true,
+      "file": "actions/jule_nap.png"
+    },
+    {
+      "id": "bed",
+      "label": "In bed",
+      "use": "App asleep, deep idle",
+      "frames": 8,
+      "fps": 5,
+      "loop": true,
+      "file": "actions/jule_bed.png"
+    },
+    {
+      "id": "turn",
+      "label": "Turn",
+      "use": "Show off gear, cosmetics preview",
+      "frames": 8,
+      "fps": 8,
+      "loop": true,
+      "file": "actions/jule_turn.png"
+    },
+    {
+      "id": "boop",
+      "label": "Boop",
+      "use": "User clicks her",
+      "frames": 8,
+      "fps": 12,
+      "loop": false,
+      "file": "actions/jule_boop.png"
+    },
+    {
+      "id": "held",
+      "label": "Held",
+      "use": "Dragged by the cursor",
+      "frames": 6,
+      "fps": 8,
+      "loop": true,
+      "file": "actions/jule_held.png"
+    },
+    {
+      "id": "dump",
+      "label": "Backpack dump",
+      "use": "Context cleanse",
+      "frames": 12,
+      "fps": 10,
+      "loop": false,
+      "file": "actions/jule_dump.png"
+    },
+    {
+      "id": "nudge",
+      "label": "Nudge",
+      "use": "Proactive suggestion",
+      "frames": 8,
+      "fps": 10,
+      "loop": false,
+      "file": "actions/jule_nudge.png"
+    }
+  ],
+  "states": [
+    {
+      "id": "fresh",
+      "label": "Fresh",
+      "tokens": "0 – 5k",
+      "accent": "#7bbf6a",
+      "note": "Standing tall, tails up, small pack, easy smile.",
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "file": "states/jule_state-fresh.png"
+    },
+    {
+      "id": "loaded",
+      "label": "Loaded",
+      "tokens": "5k – 32k",
+      "accent": "#f0b13f",
+      "note": "Wider stance, pack stuffed with scrolls, focused.",
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "file": "states/jule_state-loaded.png"
+    },
+    {
+      "id": "heavy",
+      "label": "Heavy",
+      "tokens": "32k – 128k",
+      "accent": "#e08a3a",
+      "note": "Knees bent, pack towering, brow down. Sweat is its own layer.",
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "file": "states/jule_state-heavy.png"
+    },
+    {
+      "id": "crashed",
+      "label": "Crashed",
+      "tokens": "128k +",
+      "accent": "#e04a4a",
+      "note": "Face down, pack toppled. Dizzy swirl is its own layer.",
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "file": "states/jule_state-crashed.png"
+    },
+    {
+      "id": "chest",
+      "label": "Loot chest",
+      "tokens": "on reset",
+      "accent": "#f0b13f",
+      "note": "Closed, then burst open. Lid and particles are separate layers.",
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "file": "states/jule_state-chest.png"
+    }
+  ],
+  "looks": {
+    "file": "looks/jule_look.png",
+    "frames": 8,
+    "order": [
+      "up-left",
+      "up",
+      "up-right",
+      "left",
+      "right",
+      "down-left",
+      "down",
+      "down-right"
+    ],
+    "loop": false,
+    "note": "Single stills. Cross-fade between neighbours over 2 frames for cursor-follow."
+  },
+  "profile": {
+    "file": "profile/jule_profile.png",
+    "frames": 5,
+    "order": [
+      "neutral",
+      "mirrored",
+      "grin",
+      "blink",
+      "surprised"
+    ],
+    "note": "Side construction. The walk cycle is built on this pose."
+  },
+  "accessories": [
+    {
+      "id": "hat-wizard",
+      "label": "Wizard hat",
+      "slot": "head",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_hat-wizard.png"
+    },
+    {
+      "id": "hat-cowboy",
+      "label": "Cowboy hat",
+      "slot": "head",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_hat-cowboy.png"
+    },
+    {
+      "id": "crown",
+      "label": "Royal crown",
+      "slot": "head",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_crown.png"
+    },
+    {
+      "id": "pack-battery",
+      "label": "Battery pack",
+      "slot": "back",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_pack-battery.png"
+    },
+    {
+      "id": "pack-vault",
+      "label": "Bank vault",
+      "slot": "back",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_pack-vault.png"
+    },
+    {
+      "id": "campfire",
+      "label": "Campfire",
+      "slot": "scene",
+      "frames": 3,
+      "order": [
+        "front",
+        "three-quarter",
+        "back"
+      ],
+      "file": "accessories/jule_campfire.png"
+    }
+  ],
+  "overlay": {
+    "contact-shadow.png": "Flat smear under her feet on the transparent desktop overlay. 22x3.",
+    "tail-down-left.png": "Stepped speech tail, 11x10. Balloon sits above and left of her.",
+    "tail-down-right.png": "Mirrored tail for when she stands right of the balloon.",
+    "tail-thought.png": "Three detached squares. Thinking, not speaking.",
+    "balloon-slice.png": "9-slice source. 4px corners fixed, 1px edges repeating, interior free."
+  },
+  "palette": {
+    "o": "#221b2c",
+    "h": "#b0523c",
+    "l": "#d1795a",
+    "s": "#f6ceac",
+    "S": "#dda87f",
+    "k": "#ec8f96",
+    "w": "#3f5a7a",
+    "W": "#2c4059",
+    "t": "#e8e2d6",
+    "T": "#c2bbad",
+    "r": "#3a4a63",
+    "R": "#2a3648",
+    "b": "#e8e2d6",
+    "B": "#c2bbad",
+    "e": "#2f8f8f",
+    "E": "#1c5a5a",
+    "u": "#fff9f2",
+    "i": "#f0b13f",
+    "c": "#7ecad6",
+    "C": "#4a93a8",
+    "x": "#e04a4a",
+    "g": "#7bbf6a",
+    "n": "#6a6478",
+    "N": "#928ba6",
+    "d": "#a3814f",
+    "D": "#6d5433",
+    "f": "#4a4458",
+    "m": "#8f5f3f",
+    "p": "#b58ad6",
+    "P": "#8659ad",
+    "y": "#f5e07a",
+    "z": "#c9a227",
+    "q": "#9aa3b5",
+    "Q": "#5d6675",
+    "A": "#4fb3e8",
+    "a": "#2f7fb8",
+    "G": "#5aa84f",
+    "V": "#33683a",
+    "J": "#2a2136",
+    "j": "#3d3150",
+    "H": "#8a3f2e",
+    "L": "#ffb066",
+    "M": "#c96a2e"
+  }
+}

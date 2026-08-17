@@ -1,0 +1,34 @@
+/* The whole design system, tokens and self-hosted fonts included. Nothing here
+   is fetched at runtime, which is the point — the app has to render identically
+   with the network off. */
+@import "@contextjule/ui/globals.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  /* The window chrome is ours, so nothing is selectable or draggable except the
+     parts that say they are. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  background: var(--jule-cream);
+}
+
+/* The overlay window has no plate behind her at all — the desktop shows through.
+   Set from the route, so nothing else has to know about routing. */
+body[data-surface="overlay"] {
+  background: transparent;
+}
+
+/* Anything the user is meant to be able to select opts back in. */
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}

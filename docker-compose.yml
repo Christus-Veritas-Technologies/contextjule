@@ -1,0 +1,23 @@
+# Local Postgres for development. Production runs a managed database — nothing
+# here is meant to be deployed.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: contextjule-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: contextjule
+    ports:
+      - "5432:5432"
+    volumes:
+      - contextjule-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d contextjule"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  contextjule-pgdata:

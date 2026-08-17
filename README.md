@@ -1,95 +1,85 @@
 # contextjule
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Hono, and more.
+A desktop pet that reads your AI context window.
 
-## Features
+Context length is the one number that decides whether a ChatGPT or Claude session
+is going well, and nothing shows it to you. ContextJule turns it into a character.
+Jule lives on your desktop, watches how much context your session is carrying, and
+visibly carries the weight herself. Click once and she dumps the pack on the floor.
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Hono** - Lightweight, performant server framework
-- **Bun** - Runtime environment
-- **Prisma** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Turborepo** - Optimized monorepo build system
+Everything about a session stays on the machine. The app reads session length
+locally, never types into your chat, and no session text ever leaves the computer.
+One price, no subscription, no account.
 
-## Getting Started
+## Stack
 
-First, install the dependencies:
+- **Tauri v2 + React + TanStack Router** — the desktop app
+- **Next.js** — the marketing site and checkout
+- **Hono on Bun** — the API: Dodo Payments, licensing, gated downloads
+- **Prisma + PostgreSQL** — payments and licensing only
+- **Tailwind v4 + shadcn/ui** — restyled to the ContextJule design system
+- **Turborepo + pnpm** — the monorepo
+
+## Getting started
 
 ```bash
 pnpm install
+
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+# fill in DODO_API_KEY, DODO_WEBHOOK_KEY, DODO_PRODUCT_ID
+
+pnpm db:up          # local Postgres in Docker
+pnpm db:generate    # generate the Prisma client
+pnpm db:migrate     # create the schema
+
+pnpm dev
 ```
 
-## Database Setup
+The site is on http://localhost:3001, the API on http://localhost:3000, and the
+desktop app opens in its own window via `pnpm dev:desktop`.
 
-This project uses PostgreSQL with Prisma.
-
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
-
-```bash
-pnpm run db:push
-```
-
-Then, run the development server:
-
-```bash
-pnpm run dev
-```
-
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
-
-## UI Customization
-
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
-
-```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
-```
-
-Import shared components like this:
-
-```tsx
-import { Button } from "@contextjule/ui/components/button";
-```
-
-### Add app-specific blocks
-
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
-
-## Project Structure
+## Layout
 
 ```
 contextjule/
 ├── apps/
-│   ├── web/         # Frontend application (Next.js)
-│   └── server/      # Backend API (Hono)
+│   ├── desktop/    Tauri app — the product
+│   ├── web/        Marketing site and checkout
+│   └── server/     Hono API
 ├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   └── db/          # Database schema & queries
+│   ├── core/       Load states, pricing, licensing — no framework
+│   ├── ui/         Design system, components, sprite engine
+│   ├── db/         Prisma schema and client
+│   ├── env/        Validated environment
+│   └── config/     Shared tsconfig
+└── designs/        The design archive — read this first, and do not edit it
 ```
 
-## Available Scripts
+## Design
 
-- `pnpm run dev`: Start all applications in development mode
-- `pnpm run build`: Build all applications
-- `pnpm run dev:web`: Start only the web application
-- `pnpm run dev:server`: Start only the server
-- `pnpm run check-types`: Check TypeScript types across all apps
-- `pnpm run db:push`: Push schema changes to database
-- `pnpm run db:generate`: Generate database client/types
-- `pnpm run db:migrate`: Run database migrations
-- `pnpm run db:studio`: Open database studio UI
+`designs/README.md` is the specification. In short: Silkscreen for UI type, Space
+Grotesk for body copy, gold `#f0b13f` once per screen, 3px borders, hard offset
+shadows, nothing rounded, no dark mode. `AGENTS.md` has the rules that matter when
+changing code.
+
+## Payments
+
+Dodo Payments issues the license keys. One product, three offers — full price, a
+launch discount, and a free promotion — all the same checkout with a different
+discount code, so every copy is issued a real key and there is one delivery path
+rather than two. See `AGENTS.md`.
+
+## Scripts
+
+| | |
+|---|---|
+| `pnpm dev` | everything in development |
+| `pnpm build` | build all apps |
+| `pnpm lint` / `pnpm lint:fix` | Biome |
+| `pnpm check-types` | TypeScript across the workspace |
+| `pnpm db:up` / `pnpm db:down` | local Postgres |
+| `pnpm db:generate` | regenerate the Prisma client |
+| `pnpm db:migrate` | create and apply a migration |
+| `pnpm db:studio` | Prisma Studio |
+| `pnpm sync:sprite` | re-copy the sprite engine from `designs/source` |

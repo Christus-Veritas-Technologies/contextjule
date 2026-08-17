@@ -1,14 +1,12 @@
 "use client";
 
-import { Toaster } from "@contextjule/ui/components/sonner";
+import type { ReactNode } from "react";
 
-import { ThemeProvider } from "./theme-provider";
-
-export default function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      {children}
-      <Toaster richColors />
-    </ThemeProvider>
-  );
+/**
+ * Kept as the seam for anything that genuinely needs to wrap the tree. There is
+ * no theme provider: ContextJule has one theme, and `data-band` on a section
+ * re-tones it without any JavaScript at all.
+ */
+export default function Providers({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }

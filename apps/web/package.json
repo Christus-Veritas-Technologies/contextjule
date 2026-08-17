@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@contextjule/core": "workspace:*",
     "@contextjule/env": "workspace:*",
     "@contextjule/ui": "workspace:*",
     "@swc/helpers": "^0.5.23",
@@ -16,7 +17,6 @@
     "dotenv": "catalog:",
     "lucide-react": "catalog:",
     "next": "^16.3.0",
-    "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "sonner": "catalog:",
