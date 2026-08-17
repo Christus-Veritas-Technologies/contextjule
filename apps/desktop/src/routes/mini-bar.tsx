@@ -1,7 +1,9 @@
-import { loadStateFor } from "@contextjule/core/context";
 import { MiniBar } from "@contextjule/ui/components/mini-bar";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { hasHost } from "../lib/ipc";
+import * as ipc from "../lib/ipc";
+import { useJule } from "../lib/jule";
 import { MOCK_SURFACE } from "../lib/mock";
 
 export const Route = createFileRoute("/mini-bar")({ component: MiniBarSurface });
@@ -18,18 +20,22 @@ export const Route = createFileRoute("/mini-bar")({ component: MiniBarSurface })
  * cleanse button appears inline: the fix is then one click from the bar.
  */
 function MiniBarSurface() {
-  const load = loadStateFor(MOCK_SURFACE.tokens);
-  const expanded = load === "heavy" || load === "crashed";
+  const jule = useJule();
+  const sample = !jule.live && !hasHost();
+  const expanded = jule.load === "heavy" || jule.load === "crashed";
 
   return (
     <div className="h-svh w-svw" data-tauri-drag-region>
       <MiniBar
-        tokens={MOCK_SURFACE.tokens}
-        activity="streaming"
+        tokens={sample ? MOCK_SURFACE.tokens : jule.tokens}
+        windowSize={jule.windowSize}
+        activity={jule.activity}
         size={expanded ? "expanded" : "default"}
-        caption={MOCK_SURFACE.caption}
+        caption={jule.speaking ? jule.speaking.lines.join(" ") : undefined}
         className="shadow-none"
         style={{ width: "100vw", height: "100vh" }}
+        onCleanse={() => void jule.cleanse()}
+        onDismiss={() => void ipc.surfaceHide("mini-bar")}
       />
     </div>
   );

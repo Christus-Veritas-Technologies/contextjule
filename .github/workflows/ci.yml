@@ -1,9 +1,18 @@
 name: ci
 
+# Branch model: feature -> dev -> main.
+#
+# CI is deliberately gated on main. `dev` is the integration branch you test by
+# hand, so running the full suite on every feature merge into it would only slow
+# that loop down. What must never happen is a broken main, because a push there
+# builds and publishes installers — so a pull request INTO main is checked
+# before it can merge, and main is checked again after.
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,9 +35,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The Prisma client is generated code, not committed, so every job that
+      # The Prisma client is generated, not committed, so anything that
       # typechecks has to produce it first.
-      - run: pnpm db:generate
+      - name: Generate Prisma client
+        run: pnpm db:generate
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
 
@@ -42,3 +52,29 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: "true"
           NEXT_PUBLIC_SERVER_URL: http://localhost:3000
+
+  # The Rust side is not covered by `pnpm check-types`, and a compile error here
+  # would otherwise only surface during a release build.
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Format
+        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings

@@ -3,7 +3,7 @@ import type { Context } from "hono";
 /** A failure the client is allowed to see the reason for. */
 export class ApiError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 503,
     readonly code: string,
     message: string,
   ) {
@@ -21,6 +21,11 @@ export function notFound(code: string, message: string) {
 export function gone(code: string, message: string) {
   return new ApiError(410, code, message);
 }
+/** We genuinely do not know — the client should keep its cached answer. */
+export function unavailable(code: string, message: string) {
+  return new ApiError(503, code, message);
+}
+
 export function tooMany(code: string, message: string) {
   return new ApiError(429, code, message);
 }

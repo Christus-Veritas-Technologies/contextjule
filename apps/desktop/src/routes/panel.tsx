@@ -1,10 +1,14 @@
+import { LOAD_STATE_SPECS } from "@contextjule/core/context";
+import { formatTokens } from "@contextjule/core/format";
 import { Meter } from "@contextjule/ui/components/meter";
 import { Scene } from "@contextjule/ui/components/scene";
 import { TitleBar } from "@contextjule/ui/components/window-frame";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { appWindow } from "../lib/window";
+import * as ipc from "../lib/ipc";
+import { useJule } from "../lib/jule";
 import { MOCK_SURFACE } from "../lib/mock";
+import { appWindow } from "../lib/window";
 
 export const Route = createFileRoute("/panel")({ component: Panel });
 
@@ -17,14 +21,26 @@ export const Route = createFileRoute("/panel")({ component: Panel });
  * segments here are flex rather than fixed-width.
  */
 function Panel() {
+  const jule = useJule();
+  const sample = !jule.live && !ipc.hasHost();
+
+  const live = jule.live;
+  const tokens = sample ? MOCK_SURFACE.tokens : jule.tokens;
+  const windowSize = jule.windowSize;
+  const load = LOAD_STATE_SPECS[jule.load];
+
   return (
     <div className="flex h-svh flex-col overflow-hidden border-3 border-ink bg-cream">
-      <TitleBar buttons={2} onMaximize={() => void appWindow()?.toggleMaximize()} onClose={() => void appWindow()?.hide()} />
+      <TitleBar
+        buttons={2}
+        onMaximize={() => void appWindow()?.toggleMaximize()}
+        onClose={() => void ipc.surfaceHide("panel")}
+      />
 
       <Scene
         className="flex-1"
         scale={6}
-        action="type"
+        action={jule.action}
         skyStops={[54, 78]}
         grassHeight={78}
         grassShadeHeight={24}
@@ -35,33 +51,42 @@ function Panel() {
 
       <div className="flex flex-col gap-[9px] border-t-3 border-ink bg-cream px-4 py-3.5">
         <div className="flex items-baseline justify-between">
-          <span className="font-pixel text-[10px] text-[#a8621c]">{MOCK_SURFACE.stateLabel}</span>
-          <span className="font-pixel text-[12px] text-[#231b12]">{MOCK_SURFACE.tokenText}</span>
+          <span className="font-pixel text-[10px]" style={{ color: load.labelColor }}>
+            {load.label}
+          </span>
+          <span className="font-pixel text-[12px] text-[#231b12]">
+            {live ? formatTokens(tokens) : MOCK_SURFACE.tokenText}
+          </span>
         </div>
 
         <Meter
-          tokens={MOCK_SURFACE.tokens}
-          filled={MOCK_SURFACE.meterFilled}
-          color={MOCK_SURFACE.meterColor}
+          tokens={tokens}
+          windowSize={windowSize}
+          filled={sample ? MOCK_SURFACE.meterFilled : undefined}
           segmentHeight={16}
           gap={3}
         />
 
         <div className="flex justify-between">
           <span className="font-pixel text-[8px] text-[#8a7660]">0</span>
-          <span className="font-pixel text-[8px] text-[#8a7660]">200k</span>
+          <span className="font-pixel text-[8px] text-[#8a7660]">
+            {Math.round(windowSize / 1000)}k
+          </span>
         </div>
 
         <div className="mt-[5px] flex gap-2">
           <button
             type="button"
-            className="flex h-[38px] flex-1 items-center justify-center border-3 border-ink-soft bg-gold font-pixel text-[10px] whitespace-nowrap text-ink-soft shadow-hard transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-gold-hover active:translate-x-px active:translate-y-px"
+            disabled={!jule.session}
+            onClick={() => void jule.cleanse()}
+            className="flex h-[38px] flex-1 items-center justify-center border-3 border-ink-soft bg-gold font-pixel text-[10px] whitespace-nowrap text-ink-soft shadow-hard transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-gold-hover active:translate-x-px active:translate-y-px disabled:pointer-events-none disabled:opacity-50"
           >
             clear context
           </button>
           <button
             type="button"
-            aria-label="More"
+            aria-label="Open the full window"
+            onClick={() => void ipc.surfaceShow("main")}
             className="flex size-[38px] items-center justify-center border-3 border-ink-soft bg-[#fffdf8] font-pixel text-[11px] text-ink-soft shadow-hard-soft transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-[#f6ead6] active:translate-x-px active:translate-y-px"
           >
             +
