@@ -156,6 +156,34 @@ export function reactionActive(reaction: ActiveReaction | null, now: number): bo
 }
 
 /**
+ * The breath after a reaction, before her resting pose takes over.
+ *
+ * Every reaction strip ends mid-motion — `dump` finishes with the pack on the
+ * floor and her still bent, `cheer` with her arms up. Cutting straight from
+ * that to a static load pose is a visible snap. Holding the neutral idle loop
+ * for a moment gives the eye somewhere to land, and it costs one constant.
+ */
+export const REACTION_SETTLE_MS = 400;
+
+/**
+ * True in the window between a one-shot reaction finishing and her resting pose
+ * resuming. Sustained reactions never settle — they are still playing.
+ */
+export function reactionSettling(reaction: ActiveReaction | null, now: number): boolean {
+  if (!reaction) return false;
+  const spec = REACTION_SPECS[reaction.id];
+  if (spec.sustained) return false;
+  const since = now - reaction.startedAt;
+  return since >= spec.durationMs && since < spec.durationMs + REACTION_SETTLE_MS;
+}
+
+/** How long a reaction occupies her, settle included. */
+export function reactionTotalMs(id: ReactionId): number {
+  const spec = REACTION_SPECS[id];
+  return spec.sustained ? Number.POSITIVE_INFINITY : spec.durationMs + REACTION_SETTLE_MS;
+}
+
+/**
  * Whether a new reaction should displace the one playing.
  *
  * A dump must never be cut short by a boop, but a boop mid-sip is exactly the

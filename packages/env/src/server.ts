@@ -5,10 +5,12 @@ import { z } from "zod";
 /**
  * Server environment.
  *
- * Dodo Payments is the only payment processor and the only issuer of license
- * keys. The discount codes below are how offers work: the free promotion is a
- * 100% code with a usage cap on the same product, not a separate SKU, so paid
- * and free claims share one code path and one delivery path.
+ * Dodo Payments is the only payment processor and the only issuer of licence
+ * keys. There are no discount codes: several of the places this gets posted do
+ * not allow promo codes, and a code is a second thing that can be wrong. The
+ * one product's price is edited by hand as the launch moves through its phases
+ * — free, then $4.99, then $14.99 — and the `Promo` row is what decides which
+ * phase the site is showing.
  */
 export const env = createEnv({
   server: {
@@ -26,16 +28,33 @@ export const env = createEnv({
     /** Signing secret for inbound webhooks. Standard Webhooks scheme. */
     DODO_WEBHOOK_KEY: z.string().min(1),
     DODO_ENVIRONMENT: z.enum(["test_mode", "live_mode"]).default("test_mode"),
-    /** The one product. `pdt_…`. */
+    /** The one product. `pdt_…`. Its price is the price. */
     DODO_PRODUCT_ID: z.string().min(1),
-    /** Capped percentage code behind the struck-through launch price. */
-    DODO_LAUNCH_DISCOUNT_CODE: z.string().optional(),
-    /** 100% code with a usage limit. Absent means the free promotion is off. */
-    DODO_FREE_DISCOUNT_CODE: z.string().optional(),
 
-    // --- Transactional email ------------------------------------------------
-    RESEND_API_KEY: z.string().optional(),
+    // --- Transactional email over SMTP --------------------------------------
+    /**
+     * Plain SMTP through nodemailer rather than a provider SDK. The purchase
+     * email is the most important thing this backend sends, and SMTP means it
+     * can move between providers by editing these five values instead of by a
+     * deploy.
+     */
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    /**
+     * Implicit TLS. Left unset it is derived from the port (465 is implicit,
+     * everything else is STARTTLS), which is right almost everywhere — set it
+     * only for a provider that disagrees.
+     */
+    SMTP_SECURE: z
+      .string()
+      .optional()
+      .transform((value) => (value === undefined ? undefined : value === "true")),
+
     EMAIL_FROM: z.string().default("ContextJule <hello@contextjule.com>"),
+    /** Where a reply should land, if that is not the From address. */
+    EMAIL_REPLY_TO: z.string().optional(),
     /** Skip sending and log the payload instead. On by default in development. */
     EMAIL_DRY_RUN: z
       .string()
@@ -56,6 +75,17 @@ export const env = createEnv({
 
     /** Free claims allowed from one IP per day. Blunt, and enough. */
     FREE_CLAIM_IP_LIMIT: z.coerce.number().int().positive().default(3),
+
+    // --- publishing ---------------------------------------------------------
+    /**
+     * Bearer token for `POST /api/releases`, called by the release workflow.
+     *
+     * The only authenticated surface in the API — everything else is either
+     * public or authorised by a Dodo webhook signature. Optional so a local
+     * dev server boots without one; the endpoint returns 503 rather than
+     * defaulting to something guessable when it is unset.
+     */
+    ADMIN_TOKEN: z.string().min(32).optional(),
   },
   runtimeEnv: process.env,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

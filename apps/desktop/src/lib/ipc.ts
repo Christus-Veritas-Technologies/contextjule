@@ -105,7 +105,6 @@ export const sessionCollapse = (id: string, tokens: number) =>
  */
 export const sessionsCloseStale = (idleForMs: number) =>
   call<number>("sessions_close_stale", { idleForMs }, 0);
-
 export const eventRecord = (kind: string, sessionId?: string, tokens?: number) =>
   call<void>("event_record", { kind, sessionId: sessionId ?? null, tokens: tokens ?? null }, undefined);
 
@@ -198,13 +197,6 @@ export const surfaceToggle = (label: Surface) => call<boolean>("surface_toggle",
 export const surfaceClickThrough = (label: Surface, ignore: boolean) =>
   call<void>("surface_click_through", { label, ignore }, undefined);
 
-/** Physical screen coordinates of the cursor. Cursor-follow only. */
-export const cursorPosition = () => call<[number, number]>("cursor_position", undefined, [0, 0]);
-
-/** A window's outer position and size: [x, y, width, height]. */
-export const surfacePosition = (label: Surface) =>
-  call<[number, number, number, number]>("surface_position", { label }, [0, 0, 0, 0]);
-
 export const surfaceVisible = (label: Surface) =>
   call<boolean>("surface_visible", { label }, false);
 
@@ -225,11 +217,36 @@ export const surfaceSetVisible = (label: Surface, visible: boolean) =>
 export const surfaceSnap = (label: Surface, threshold = 24) =>
   call<void>("surface_snap", { label, threshold }, undefined);
 
-/** Sets the tray badge and broadcasts to the other windows. */
-export const setLoadState = (state: string) => call<void>("set_load_state", { state }, undefined);
-
-// ── start with the machine ──────────────────────────────────────────────────
+// ── system ──────────────────────────────────────────────────────────────────
 
 export const autostartEnabled = () => call<boolean>("autostart_enabled", undefined, false);
 export const autostartSet = (enabled: boolean) =>
   call<void>("autostart_set", { enabled }, undefined);
+
+/**
+ * Put text on the clipboard.
+ *
+ * Used for exactly one thing: handing over a `/clear` when someone taps the
+ * cleanse button. She cannot reach into their chat, so the honest version of
+ * "help her carry this" is to put the command where they can paste it.
+ */
+export async function writeClipboard(text: string): Promise<boolean> {
+  if (!hasHost()) return false;
+  try {
+    const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    await writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Physical screen coordinates of the cursor. Cursor-follow only. */
+export const cursorPosition = () => call<[number, number]>("cursor_position", undefined, [0, 0]);
+
+/** A window's outer position and size: [x, y, width, height]. */
+export const surfacePosition = (label: Surface) =>
+  call<[number, number, number, number]>("surface_position", { label }, [0, 0, 0, 0]);
+
+/** Sets the tray badge and broadcasts to the other windows. */
+export const setLoadState = (state: string) => call<void>("set_load_state", { state }, undefined);

@@ -1,6 +1,7 @@
 import { MiniBar } from "@contextjule/ui/components/mini-bar";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { useWindowDrag } from "../lib/drag";
 import { hasHost } from "../lib/ipc";
 import * as ipc from "../lib/ipc";
 import { useJule } from "../lib/jule";
@@ -21,11 +22,12 @@ export const Route = createFileRoute("/mini-bar")({ component: MiniBarSurface })
  */
 function MiniBarSurface() {
   const jule = useJule();
+  const drag = useWindowDrag("mini-bar");
   const sample = !jule.live && !hasHost();
   const expanded = jule.load === "heavy" || jule.load === "crashed";
 
   return (
-    <div className="h-svh w-svw" data-tauri-drag-region>
+    <div className="h-svh w-svw" {...drag}>
       <MiniBar
         tokens={sample ? MOCK_SURFACE.tokens : jule.tokens}
         windowSize={jule.windowSize}
@@ -35,7 +37,7 @@ function MiniBarSurface() {
         className="shadow-none"
         style={{ width: "100vw", height: "100vh" }}
         onCleanse={() => void jule.cleanse()}
-        onDismiss={() => void ipc.surfaceHide("mini-bar")}
+        onDismiss={() => void ipc.surfaceSetVisible("mini-bar", false)}
       />
     </div>
   );
