@@ -1,0 +1,203 @@
+name: Desktop – release
+
+# Only main produces installers. The flow that gets you here is
+# feature -> PR -> dev -> (you test dev) -> PR -> main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+concurrency:
+  group: release-desktop
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            target: x86_64-pc-windows-msvc
+          # A universal binary rather than two: one download, and Apple Silicon
+          # users are not left running under Rosetta by accident.
+          - os: macos-latest
+            platform: macos
+            target: universal-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.platform }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # The desktop app imports @contextjule/core and @contextjule/ui, which are
+      # plain TypeScript sources — nothing needs the database. Generating the
+      # Prisma client anyway keeps `pnpm build` from tripping over the workspace.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
+
+      - name: Build desktop (Tauri)
+        env:
+          # Signing the updater artifacts. Both are secrets — never inline the
+          # password, it is as sensitive as the key it unlocks.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Baked into the binary at compile time so a release cannot be pointed
+          # somewhere else by editing a file on disk.
+          CONTEXTJULE_API_URL: ${{ secrets.CONTEXTJULE_API_URL }}
+          CONTEXTJULE_DODO_URL: ${{ secrets.CONTEXTJULE_DODO_URL }}
+        run: pnpm --filter contextjule exec tauri build --target ${{ matrix.target }}
+
+      - name: Collect artifacts (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          $base = "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          Copy-Item "$base/nsis/*.exe"     dist-release/ContextJule-Setup.exe     -ErrorAction Stop
+          Copy-Item "$base/nsis/*.exe.sig" dist-release/ContextJule-Setup.exe.sig -ErrorAction Stop
+          Copy-Item "$base/msi/*.msi"      dist-release/ContextJule.msi           -ErrorAction SilentlyContinue
+
+      - name: Collect artifacts (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p dist-release
+          base="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          cp "$base"/dmg/*.dmg dist-release/ContextJule.dmg
+          # The updater consumes the tarball on macOS, not the dmg.
+          cp "$base"/macos/*.app.tar.gz     dist-release/ContextJule.app.tar.gz
+          cp "$base"/macos/*.app.tar.gz.sig dist-release/ContextJule.app.tar.gz.sig
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contextjule-${{ matrix.platform }}
+          path: dist-release/*
+          if-no-files-found: error
+
+  # One job to write one latest.json. The updater manifest has to list every
+  # platform in a single file, so it cannot be produced by either build alone.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build latest.json
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          base="${R2_PUBLIC_URL%/}"
+          win_sig=$(cat artifacts/contextjule-windows/ContextJule-Setup.exe.sig)
+          mac_sig=$(cat artifacts/contextjule-macos/ContextJule.app.tar.gz.sig)
+
+          # The updater downloads these exact URLs, so they must be the stable
+          # overwrite targets below — never a versioned filename, or every past
+          # release would keep pointing at its own build forever.
+          node - <<EOF > latest.json
+          const manifest = {
+            version: "${{ steps.version.outputs.version }}",
+            notes: "",
+            pub_date: new Date().toISOString(),
+            platforms: {
+              "windows-x86_64": {
+                signature: \`${win_sig}\`.trim(),
+                url: "${base}/ContextJule-Setup.exe",
+              },
+              "darwin-x86_64": {
+                signature: \`${mac_sig}\`.trim(),
+                url: "${base}/ContextJule.app.tar.gz",
+              },
+              "darwin-aarch64": {
+                signature: \`${mac_sig}\`.trim(),
+                url: "${base}/ContextJule.app.tar.gz",
+              },
+            },
+          };
+          console.log(JSON.stringify(manifest));
+          EOF
+          cat latest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contextjule-update-manifest
+          path: latest.json
+
+      - name: Upload to R2
+        if: ${{ secrets.R2_ACCOUNT_ID != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          # Fixed filenames, overwritten every release. The download links in
+          # purchase emails and the updater manifest both point here, so they
+          # must not move.
+          aws s3 cp artifacts/contextjule-windows/ContextJule-Setup.exe \
+            "s3://${R2_BUCKET}/ContextJule-Setup.exe" --endpoint-url "$endpoint" \
+            --content-type "application/vnd.microsoft.portable-executable" \
+            --content-disposition 'attachment; filename="ContextJule-Setup.exe"' \
+            --cache-control "public, max-age=300"
+
+          aws s3 cp artifacts/contextjule-windows/ContextJule-Setup.exe.sig \
+            "s3://${R2_BUCKET}/ContextJule-Setup.exe.sig" --endpoint-url "$endpoint" \
+            --content-type "text/plain"
+
+          aws s3 cp artifacts/contextjule-macos/ContextJule.dmg \
+            "s3://${R2_BUCKET}/ContextJule.dmg" --endpoint-url "$endpoint" \
+            --content-type "application/x-apple-diskimage" \
+            --content-disposition 'attachment; filename="ContextJule.dmg"' \
+            --cache-control "public, max-age=300"
+
+          aws s3 cp artifacts/contextjule-macos/ContextJule.app.tar.gz \
+            "s3://${R2_BUCKET}/ContextJule.app.tar.gz" --endpoint-url "$endpoint" \
+            --content-type "application/gzip"
+
+          aws s3 cp artifacts/contextjule-macos/ContextJule.app.tar.gz.sig \
+            "s3://${R2_BUCKET}/ContextJule.app.tar.gz.sig" --endpoint-url "$endpoint" \
+            --content-type "text/plain"
+
+          # No cache on the manifest: an update should be visible immediately.
+          aws s3 cp latest.json "s3://${R2_BUCKET}/latest.json" \
+            --endpoint-url "$endpoint" --content-type "application/json" \
+            --cache-control "no-cache"

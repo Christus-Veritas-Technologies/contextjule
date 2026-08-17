@@ -90,9 +90,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis", "dmg", "app"],
+    "targets": [
+      "msi",
+      "nsis",
+      "dmg",
+      "app"
+    ],
     "publisher": "Christus Veritas Technologies",
-    "copyright": "© Christus Veritas Technologies",
+    "copyright": "\u00a9 Christus Veritas Technologies",
     "category": "Productivity",
     "shortDescription": "A desktop pet that reads your AI context window.",
     "longDescription": "Jule lives on your desktop, watches how much context your session is carrying, and visibly carries the weight herself. Everything runs locally: no session text ever leaves the machine.",
@@ -103,8 +108,25 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["icons/tray/*"],
-    "windows": { "allowDowngrades": false },
-    "macOS": { "minimumSystemVersion": "10.15" }
+    "resources": [
+      "icons/tray/*"
+    ],
+    "windows": {
+      "allowDowngrades": false
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://downloads.contextjule.com/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBKEY",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

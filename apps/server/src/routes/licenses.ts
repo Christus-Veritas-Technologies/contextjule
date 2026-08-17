@@ -1,31 +1,79 @@
 import {
   activateRequestSchema,
   deactivateRequestSchema,
+  type LicenseState,
+  type LicenseStatus,
   validateRequestSchema,
 } from "@contextjule/core/licensing";
 import prisma from "@contextjule/db";
 import { Hono } from "hono";
 
 import { dodo, DODO_PUBLIC_BASE } from "../lib/dodo";
-import { badRequest } from "../lib/http";
+import { ApiError, badRequest } from "../lib/http";
 
 /**
- * License activation.
+ * Licensing.
  *
- * Dodo's activate/validate/deactivate endpoints are public, so the desktop app
- * could call them directly and skip this server entirely — and it deliberately
- * falls back to doing exactly that when this API is unreachable. What routing
- * through here buys is the activation landing in our own database, so support
- * can answer "which machines is my key on" and free a slot for someone.
+ * Worth being precise about what Dodo actually hands back, because it shapes
+ * this whole file:
  *
- * That means none of this is a security boundary. Dodo's answer is the answer.
+ *   POST /licenses/activate  →  the instance, plus product and customer.
+ *                               403 inactive, 404 unknown, 422 limit reached.
+ *   POST /licenses/validate  →  `{ "valid": boolean }`. That is all of it.
+ *
+ * So activate can explain itself and validate cannot. Dodo is still the
+ * authority on whether a key is good — we never override its verdict — but a
+ * bare `false` is useless to a customer staring at a locked app. This endpoint
+ * merges Dodo's answer with our own `LicenseKey` row, which the webhooks keep
+ * current, so the app can say *why*: expired, revoked after a refund, or every
+ * activation in use.
+ *
+ * None of this is a security boundary. The desktop app falls back to calling
+ * Dodo directly when this API is unreachable, and to its cached row after that.
  */
 export const licenseRoutes = new Hono();
 
-/** Told to the desktop app at first run so it knows where to fall back to. */
-licenseRoutes.get("/config", (c) => {
-  return c.json({ publicBase: DODO_PUBLIC_BASE });
-});
+/** Told to the app at first run so it knows where to fall back to. */
+licenseRoutes.get("/config", (c) => c.json({ publicBase: DODO_PUBLIC_BASE }));
+
+/** Dodo's status codes, in the words the customer should read. */
+function reasonFor(status: number): { code: string; message: string; licenseStatus: LicenseStatus } {
+  switch (status) {
+    case 403:
+      return {
+        code: "key_inactive",
+        message: "This key is no longer active — a refund or chargeback, usually.",
+        licenseStatus: "revoked",
+      };
+    case 404:
+      return {
+        code: "unknown_key",
+        message: "That key was not recognised. Check it against your purchase email.",
+        licenseStatus: "invalid",
+      };
+    case 422:
+      return {
+        code: "limit_reached",
+        message: "Every activation on this key is in use. Free one up first.",
+        licenseStatus: "limit_reached",
+      };
+    default:
+      return {
+        code: "upstream_error",
+        message: "The licence server could not be reached. Try again shortly.",
+        licenseStatus: "invalid",
+      };
+  }
+}
+
+/** The Dodo SDK throws with a numeric `status`; anything else is a real bug. */
+function upstreamStatus(error: unknown): number | null {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status: unknown }).status;
+    if (typeof status === "number") return status;
+  }
+  return null;
+}
 
 licenseRoutes.post("/activate", async (c) => {
   const parsed = activateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
@@ -34,11 +82,11 @@ licenseRoutes.post("/activate", async (c) => {
 
   const stored = await prisma.licenseKey.findUnique({
     where: { key: licenseKey },
-    include: { activations: { where: { deactivatedAt: null } } },
+    include: { activations: { where: { deactivatedAt: null } }, customer: true },
   });
 
   // A machine that has activated before reuses its slot rather than burning a
-  // new one — reinstalls and OS upgrades should not cost the customer anything.
+  // new one. Reinstalls and OS upgrades should not cost the customer anything.
   const existing = stored?.activations.find((a) => a.machineId === machineId);
   if (existing?.dodoInstanceId) {
     const check = await dodo.licenses.validate({
@@ -50,30 +98,44 @@ licenseRoutes.post("/activate", async (c) => {
         where: { id: existing.id },
         data: { lastSeenAt: new Date(), appVersion: appVersion ?? undefined },
       });
-      return c.json({
-        status: "active",
-        licenseKeyInstanceId: existing.dodoInstanceId,
-        activationsUsed: stored?.activationsUsed ?? null,
-        activationsLimit: stored?.activationsLimit ?? null,
-      });
+      return c.json(describe(stored, existing.dodoInstanceId, "active"));
     }
   }
 
-  const activation = await dodo.licenses.activate({ license_key: licenseKey, name: deviceName });
+  let instanceId: string;
+  try {
+    const activation = await dodo.licenses.activate({
+      license_key: licenseKey,
+      name: deviceName,
+    });
+    instanceId = activation.id;
+  } catch (error) {
+    const status = upstreamStatus(error);
+    if (status) {
+      const reason = reasonFor(status);
+      // Mirror what Dodo just told us, so the next validate is already right.
+      if (stored && reason.licenseStatus === "revoked") {
+        await prisma.licenseKey.update({ where: { id: stored.id }, data: { status: "revoked" } });
+      }
+      // Forward the code so the desktop client can map it without parsing prose.
+      throw new ApiError(status === 422 ? 422 : status === 404 ? 404 : 403, reason.code, reason.message);
+    }
+    throw error;
+  }
 
   if (stored) {
     await prisma.licenseActivation.upsert({
       where: { licenseKeyId_machineId: { licenseKeyId: stored.id, machineId } },
       create: {
         licenseKeyId: stored.id,
-        dodoInstanceId: activation.id,
+        dodoInstanceId: instanceId,
         machineId,
         deviceName,
         platform,
         appVersion: appVersion ?? null,
       },
       update: {
-        dodoInstanceId: activation.id,
+        dodoInstanceId: instanceId,
         deviceName,
         platform,
         appVersion: appVersion ?? null,
@@ -81,49 +143,89 @@ licenseRoutes.post("/activate", async (c) => {
         lastSeenAt: new Date(),
       },
     });
-    await prisma.licenseKey.update({
+    const updated = await prisma.licenseKey.update({
       where: { id: stored.id },
       data: { activationsUsed: { increment: 1 } },
+      include: { customer: true, activations: { where: { deactivatedAt: null } } },
     });
+    return c.json(describe(updated, instanceId, "active"));
   }
 
+  // The key is real to Dodo but we have not seen its webhook yet. Say so
+  // honestly rather than inventing counts we do not have.
   return c.json({
-    status: "active",
-    licenseKeyInstanceId: activation.id,
-    activationsUsed: stored ? stored.activationsUsed + 1 : null,
-    activationsLimit: stored?.activationsLimit ?? null,
+    valid: true,
+    status: "active" satisfies LicenseStatus,
+    licenseKeyInstanceId: instanceId,
+    email: null,
+    activationsUsed: null,
+    activationsLimit: null,
+    expiresAt: null,
   });
 });
 
 licenseRoutes.post("/validate", async (c) => {
   const parsed = validateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest("invalid_body", "That key does not look right.");
+  const { licenseKey, licenseKeyInstanceId } = parsed.data;
 
-  const result = await dodo.licenses.validate({
-    license_key: parsed.data.licenseKey,
-    ...(parsed.data.licenseKeyInstanceId
-      ? { license_key_instance_id: parsed.data.licenseKeyInstanceId }
-      : {}),
+  const stored = await prisma.licenseKey.findUnique({
+    where: { key: licenseKey },
+    include: { customer: true, activations: { where: { deactivatedAt: null } } },
   });
 
-  if (result.valid && parsed.data.licenseKeyInstanceId) {
+  let valid = false;
+  try {
+    const result = await dodo.licenses.validate({
+      license_key: licenseKey,
+      ...(licenseKeyInstanceId ? { license_key_instance_id: licenseKeyInstanceId } : {}),
+    });
+    valid = result.valid;
+  } catch (error) {
+    const status = upstreamStatus(error);
+    // A 4xx from Dodo is an answer, not an outage: the key is bad. Anything
+    // else means we genuinely do not know, and the client should keep its cache
+    // rather than lock a paying customer out over our downtime.
+    if (!status || status >= 500) {
+      throw new ApiError(503, "upstream_unavailable", "Could not reach the licence server.");
+    }
+    valid = false;
+  }
+
+  if (valid && licenseKeyInstanceId) {
     await prisma.licenseActivation.updateMany({
-      where: { dodoInstanceId: parsed.data.licenseKeyInstanceId },
+      where: { dodoInstanceId: licenseKeyInstanceId },
       data: { lastSeenAt: new Date() },
     });
   }
 
-  return c.json({ valid: result.valid, status: result.valid ? "active" : "invalid" });
+  // Dodo said no. Our row is what turns that into a sentence.
+  const status: LicenseStatus = valid
+    ? "active"
+    : stored?.status === "revoked"
+      ? "revoked"
+      : stored?.expiresAt && stored.expiresAt < new Date()
+        ? "expired"
+        : stored && stored.activationsLimit !== null && stored.activationsUsed >= stored.activationsLimit
+          ? "limit_reached"
+          : "invalid";
+
+  return c.json({ ...describe(stored, licenseKeyInstanceId ?? null, status), valid });
 });
 
 licenseRoutes.post("/deactivate", async (c) => {
   const parsed = deactivateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest("invalid_body", "Missing the activation to release.");
 
-  await dodo.licenses.deactivate({
-    license_key: parsed.data.licenseKey,
-    license_key_instance_id: parsed.data.licenseKeyInstanceId,
-  });
+  try {
+    await dodo.licenses.deactivate({
+      license_key: parsed.data.licenseKey,
+      license_key_instance_id: parsed.data.licenseKeyInstanceId,
+    });
+  } catch (error) {
+    // A slot that is already gone is the outcome we wanted anyway.
+    if (upstreamStatus(error) !== 404) throw error;
+  }
 
   const activation = await prisma.licenseActivation.findUnique({
     where: { dodoInstanceId: parsed.data.licenseKeyInstanceId },
@@ -161,3 +263,32 @@ licenseRoutes.get("/:key/activations", async (c) => {
     })),
   });
 });
+
+type StoredKey = {
+  key: string;
+  activationsUsed: number;
+  activationsLimit: number | null;
+  expiresAt: Date | null;
+  customer?: { email: string } | null;
+} | null;
+
+/** One shape for every response, matching `LicenseState` in @contextjule/core. */
+function describe(
+  stored: StoredKey,
+  instanceId: string | null,
+  status: LicenseStatus,
+): LicenseState & { valid: boolean } {
+  return {
+    valid: status === "active",
+    status,
+    licenseKey: stored?.key ?? null,
+    licenseKeyInstanceId: instanceId,
+    activationsUsed: stored?.activationsUsed ?? null,
+    activationsLimit: stored?.activationsLimit ?? null,
+    expiresAt: stored?.expiresAt?.toISOString() ?? null,
+    lastValidatedAt: new Date().toISOString(),
+    // Not part of LicenseState, but the app shows "licensed to …" and this is
+    // the only place that fact exists.
+    ...(stored?.customer?.email ? { email: stored.customer.email } : { email: null }),
+  } as LicenseState & { valid: boolean; email: string | null };
+}

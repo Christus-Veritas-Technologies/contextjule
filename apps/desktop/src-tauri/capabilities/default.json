@@ -2,7 +2,13 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Deliberately narrow. The app reads local session state and talks to Dodo's public license endpoints; it needs no filesystem, shell or http permissions beyond that.",
-  "windows": ["main", "panel", "mini-bar", "tray-flyout", "overlay"],
+  "windows": [
+    "main",
+    "panel",
+    "mini-bar",
+    "tray-flyout",
+    "overlay"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
@@ -15,6 +21,8 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-ignore-cursor-events",
     "core:webview:allow-create-webview-window",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "updater:default",
+    "core:event:default"
   ]
 }
