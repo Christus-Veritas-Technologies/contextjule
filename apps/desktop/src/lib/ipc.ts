@@ -86,6 +86,26 @@ export const sessionsList = (since?: number, limit?: number) =>
 export const sessionEnd = (id: string) => call<void>("session_end", { id }, undefined);
 export const sessionCleanse = (id: string) => call<void>("session_cleanse", { id }, undefined);
 
+/**
+ * Record a session crossing into `crashed`.
+ *
+ * Called on the crossing itself, not on every tick above the threshold — the
+ * growth screen counts collapses, and counting one per second while somebody
+ * sits at 130k would make that number meaningless.
+ */
+export const sessionCollapse = (id: string, tokens: number) =>
+  call<void>("session_collapse", { id, tokens }, undefined);
+
+/**
+ * Close sessions that have been idle too long.
+ *
+ * The Rust side runs this on a timer as well; this is the manual handle, for a
+ * screen that wants the number to be right now rather than within a minute.
+ * Returns how many were closed.
+ */
+export const sessionsCloseStale = (idleForMs: number) =>
+  call<number>("sessions_close_stale", { idleForMs }, 0);
+
 export const eventRecord = (kind: string, sessionId?: string, tokens?: number) =>
   call<void>("event_record", { kind, sessionId: sessionId ?? null, tokens: tokens ?? null }, undefined);
 
@@ -185,5 +205,31 @@ export const cursorPosition = () => call<[number, number]>("cursor_position", un
 export const surfacePosition = (label: Surface) =>
   call<[number, number, number, number]>("surface_position", { label }, [0, 0, 0, 0]);
 
+export const surfaceVisible = (label: Surface) =>
+  call<boolean>("surface_visible", { label }, false);
+
+/**
+ * Show or hide a surface *and remember the choice*.
+ *
+ * Distinct from `surfaceShow`/`surfaceHide`, which are momentary. This is what
+ * the nudges screen's toggles call, so a window the user turned off stays off
+ * across a restart rather than reappearing on next launch.
+ */
+export const surfaceSetVisible = (label: Surface, visible: boolean) =>
+  call<void>("surface_set_visible", { label, visible }, undefined);
+
+/**
+ * Snap a window to the nearest screen edge if it is within `threshold` pixels.
+ * Called on drag release, which is the only moment it makes sense.
+ */
+export const surfaceSnap = (label: Surface, threshold = 24) =>
+  call<void>("surface_snap", { label, threshold }, undefined);
+
 /** Sets the tray badge and broadcasts to the other windows. */
 export const setLoadState = (state: string) => call<void>("set_load_state", { state }, undefined);
+
+// ── start with the machine ──────────────────────────────────────────────────
+
+export const autostartEnabled = () => call<boolean>("autostart_enabled", undefined, false);
+export const autostartSet = (enabled: boolean) =>
+  call<void>("autostart_set", { enabled }, undefined);

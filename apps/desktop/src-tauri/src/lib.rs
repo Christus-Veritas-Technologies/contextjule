@@ -306,6 +306,71 @@ fn set_load_state(app: tauri::AppHandle, state: String) -> tauri::Result<()> {
     Ok(())
 }
 
+/// She went down. The caller owns the edge detection, because only the frontend
+/// knows what the previous load state was.
+#[tauri::command]
+fn session_collapse(store: tauri::State<'_, Store>, id: String, tokens: i64) -> store::Result<()> {
+    store::session_collapse(&store, &id, tokens, now())
+}
+
+#[tauri::command]
+fn sessions_close_stale(store: tauri::State<'_, Store>, idle_for_ms: i64) -> store::Result<usize> {
+    store::end_stale_sessions(&store, idle_for_ms, now())
+}
+
+#[tauri::command]
+fn surface_visible(app: tauri::AppHandle, label: String) -> bool {
+    windows::is_visible(&app, &label)
+}
+
+/// Show or hide a surface and remember the choice for next launch.
+#[tauri::command]
+fn surface_set_visible(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Store>,
+    label: String,
+    visible: bool,
+) -> tauri::Result<()> {
+    if visible {
+        windows::show(&app, &label)?;
+    } else {
+        windows::hide(&app, &label)?;
+    }
+    windows::remember_visible(&store, &label, visible);
+    Ok(())
+}
+
+/// Park a window against the nearest screen edge.
+#[tauri::command]
+fn surface_snap(app: tauri::AppHandle, label: String, threshold: i32) -> tauri::Result<()> {
+    if let Some(window) = windows::get(&app, &label) {
+        windows::snap_to_edge(&window, threshold)?;
+    }
+    Ok(())
+}
+
+/// Start with the machine.
+///
+/// Read through the plugin rather than mirrored into our settings table: the
+/// operating system is the source of truth here, and a user who turns it off in
+/// their own login items should see that reflected.
+#[tauri::command]
+fn autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
+}
+
 // ── entry point ─────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -314,6 +379,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // MacosLauncher is ignored off macOS. No extra args: the app decides
+        // for itself whether to show a window on a login start.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             app_info,
             machine_id,
@@ -325,6 +397,8 @@ pub fn run() {
             sessions_list,
             session_end,
             session_cleanse,
+            session_collapse,
+            sessions_close_stale,
             event_record,
             stats,
             unlocks_list,
@@ -338,8 +412,13 @@ pub fn run() {
             surface_toggle,
             surface_click_through,
             surface_position,
+            surface_visible,
+            surface_set_visible,
+            surface_snap,
             cursor_position,
             set_load_state,
+            autostart_enabled,
+            autostart_set,
             sources_status,
             statusline_installed,
             statusline_install,
@@ -359,36 +438,20 @@ pub fn run() {
 
             tray::build(&handle)?;
 
-            // The transcript readers run on their own thread and post through a
-            // channel. A blocking file read on a slow disk must not be able to
-            // wedge Tauri's runtime, and a source that throws must not take the
-            // app down with it.
-            let (tx, rx) = mpsc::channel::<sources::Reading>();
-            std::thread::spawn(move || {
-                SourceRunner::new().run(tx, std::time::Duration::from_secs(2));
-            });
+            // Reopen whatever was open last time, then start the janitor that
+            // closes sessions nothing has written to. Without it `ended_at`
+            // stays null forever and "time together" counts every abandoned
+            // session as still running.
+            if let Some(store) = handle.try_state::<Store>() {
+                windows::restore_visibility(&handle, &store);
+            }
 
-            let sink = handle.clone();
-            std::thread::spawn(move || {
-                for reading in rx {
-                    let Some(store) = sink.try_state::<Store>() else { continue };
-                    let written = store::session_upsert(
-                        &store,
-                        SessionUpsert {
-                            id: reading.session_key.clone(),
-                            source: reading.source.to_string(),
-                            title: reading.title.clone(),
-                            model: reading.model.clone(),
-                            window_size: Some(reading.window_size),
-                            tokens: reading.tokens,
-                        },
-                        reading.at,
-                    );
-                    // Every window refreshes off this rather than polling the
-                    // database on a timer of its own.
-                    if written.is_ok() {
-                        let _ = sink.emit("session-updated", &reading);
-                    }
+            let janitor = handle.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+                if let Some(store) = janitor.try_state::<Store>() {
+                    // Thirty minutes with no new tokens means the session is over.
+                    let _ = store::end_stale_sessions(&store, 30 * 60 * 1000, now());
                 }
             });
 
@@ -405,6 +468,14 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } if window.label() == windows::MAIN => {
                 api.prevent_close();
                 let _ = window.hide();
+            }
+            WindowEvent::CloseRequested { api, .. } if window.label() != windows::MAIN => {
+                // Dismissing a compact surface is a preference, not a crash.
+                api.prevent_close();
+                let _ = window.hide();
+                if let Some(store) = window.app_handle().try_state::<Store>() {
+                    windows::remember_visible(&store, window.label(), false);
+                }
             }
             WindowEvent::Moved(position) => {
                 if let Some(store) = window.app_handle().try_state::<Store>() {

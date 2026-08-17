@@ -69,7 +69,10 @@ export const LOAD_STATE_SPECS: Readonly<Record<LoadState, LoadStateSpec>> = {
 
 /** Which state a raw token count falls in. */
 export function loadStateFor(tokens: number): LoadState {
-  if (!Number.isFinite(tokens) || tokens < 0) return "fresh";
+  // NaN and negatives are bad readings and must not alarm anyone. Infinity is
+  // not the same case: a count that has run away is the *most* alarming thing
+  // there is, and it falls through to `crashed` below on purpose.
+  if (Number.isNaN(tokens) || tokens < 0) return "fresh";
   if (tokens >= LOAD_STATE_SPECS.crashed.from) return "crashed";
   if (tokens >= LOAD_STATE_SPECS.heavy.from) return "heavy";
   if (tokens >= LOAD_STATE_SPECS.loaded.from) return "loaded";

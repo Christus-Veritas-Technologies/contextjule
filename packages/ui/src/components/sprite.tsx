@@ -4,7 +4,7 @@ import { cn } from "@contextjule/ui/lib/utils";
 import type * as React from "react";
 
 import { usePrefersReducedMotion, useSpriteAnimation } from "../hooks/use-sprite";
-import { renderGrid, type Grid, type RenderedFrame } from "../jule/render";
+import { juleEngine, renderGrid, type Grid, type RenderedFrame } from "../jule/render";
 
 /**
  * One sprite frame, drawn as a stack of box-shadows on a single element.
@@ -36,6 +36,25 @@ export interface SpriteProps extends Omit<React.ComponentProps<"div">, "children
   /** Freeze on one frame instead of animating. */
   frameIndex?: number;
   anchor?: "box" | "origin";
+  /**
+   * Flip her horizontally.
+   *
+   * The walk cycle is drawn facing one way and mirrored for the other — the
+   * design archive is explicit that there is no second strip.
+   */
+  mirrored?: boolean;
+  /**
+   * A collectible to draw her wearing, from `designs/animations/manifest.json`.
+   *
+   * The engine draws worn items as part of the pose rather than as an overlay —
+   * the pack shell goes behind her arm, a hat sits under the hair sway — so
+   * this replaces the frame rather than layering on top of one. That is also
+   * why it only applies to a standing pose: `worn()` has three views, not
+   * twenty animations.
+   */
+  wearing?: string;
+  /** Which way she is facing when wearing something. */
+  view?: "front" | "three-quarter" | "back";
   /** Render a pre-built grid instead of an action. */
   grid?: Grid;
   /** Render an already-rendered frame. Cheapest path for a long strip. */
@@ -50,6 +69,9 @@ function Sprite({
   playing = true,
   frameIndex,
   anchor = "box",
+  mirrored = false,
+  wearing,
+  view = "front",
   grid,
   frame,
   className,
@@ -59,12 +81,14 @@ function Sprite({
   const reduced = usePrefersReducedMotion();
   const animated = useSpriteAnimation(state ?? action, scale, {
     fx,
-    playing: playing && !reduced && frameIndex === undefined && !grid && !frame,
+    playing: playing && !reduced && frameIndex === undefined && !grid && !frame && !wearing,
     state: Boolean(state),
     frameIndex,
+    mirrored,
   });
 
-  const rendered = frame ?? (grid ? renderGrid(grid, scale) : animated);
+  const worn = wearing ? renderGrid(juleEngine().worn(wearing, view, {}), scale, mirrored) : null;
+  const rendered = frame ?? worn ?? (grid ? renderGrid(grid, scale, mirrored) : animated);
   if (!rendered) return null;
 
   if (anchor === "origin") {

@@ -58,7 +58,7 @@ export function SourcesCard() {
 
       {!anyAvailable ? (
         <span className="text-[11px] leading-[1.5] text-[#5b6b7c]">
-          Nothing to read yet. She starts watching the moment one of these runs.
+          Nothing to read yet. She starts watching the moment Claude Code or Codex runs.
         </span>
       ) : null}
 

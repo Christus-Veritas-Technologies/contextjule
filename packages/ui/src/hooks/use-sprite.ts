@@ -14,13 +14,19 @@ import { actionSpec, renderStateStrip, renderStrip, type RenderedFrame } from ".
 export function useSpriteAnimation(
   action: string,
   unit: number,
-  options: { fx?: boolean; playing?: boolean; state?: boolean; frameIndex?: number } = {},
+  options: {
+    fx?: boolean;
+    playing?: boolean;
+    state?: boolean;
+    frameIndex?: number;
+    mirrored?: boolean;
+  } = {},
 ): RenderedFrame | undefined {
-  const { fx = true, playing = true, state = false, frameIndex } = options;
+  const { fx = true, playing = true, state = false, frameIndex, mirrored = false } = options;
 
   const strip = useMemo(
-    () => (state ? renderStateStrip(action, unit) : renderStrip(action, unit, { fx })),
-    [action, unit, fx, state],
+    () => (state ? renderStateStrip(action, unit) : renderStrip(action, unit, { fx }, mirrored)),
+    [action, unit, fx, state, mirrored],
   );
 
   const spec = state ? undefined : actionSpec(action);
