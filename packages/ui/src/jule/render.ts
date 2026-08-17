@@ -26,8 +26,21 @@ export function juleEngine(): Jule {
   return engine;
 }
 
-export function renderGrid(grid: Grid, unit: number): RenderedFrame {
+/**
+ * Flip a copy rather than the original.
+ *
+ * The engine's `mirror` works in place, and strips are cached — mirroring the
+ * cached grid would flip her permanently on the second pass.
+ */
+function mirrored(grid: Grid): Grid {
+  const copy = grid.map((row) => row.slice());
+  juleEngine().mirror(copy);
+  return copy;
+}
+
+export function renderGrid(source: Grid, unit: number, flip = false): RenderedFrame {
   const j = juleEngine();
+  const grid = flip ? mirrored(source) : source;
   const firstRow = grid[0];
   return {
     boxShadow: j.shadow(grid, unit),
@@ -55,10 +68,15 @@ export function renderState(id: string, frame: number, unit: number): RenderedFr
  * grid and builds a long string, so anything that animates should hold the
  * whole strip rather than regenerate on each tick.
  */
-export function renderStrip(id: string, unit: number, opts?: ActionOptions): RenderedFrame[] {
+export function renderStrip(
+  id: string,
+  unit: number,
+  opts?: ActionOptions,
+  flip = false,
+): RenderedFrame[] {
   const j = juleEngine();
   const count = actionSpec(id)?.frames ?? j.frames(id);
-  return Array.from({ length: count }, (_, f) => renderGrid(j.action(id, f, opts), unit));
+  return Array.from({ length: count }, (_, f) => renderGrid(j.action(id, f, opts), unit, flip));
 }
 
 export function renderStateStrip(id: string, unit: number, frames = 4): RenderedFrame[] {

@@ -86,6 +86,25 @@ export const sessionsList = (since?: number, limit?: number) =>
 export const sessionEnd = (id: string) => call<void>("session_end", { id }, undefined);
 export const sessionCleanse = (id: string) => call<void>("session_cleanse", { id }, undefined);
 
+/**
+ * Record a session crossing into `crashed`.
+ *
+ * Called on the crossing itself, not on every tick above the threshold — the
+ * growth screen counts collapses, and counting one per second while somebody
+ * sits at 130k would make that number meaningless.
+ */
+export const sessionCollapse = (id: string, tokens: number) =>
+  call<void>("session_collapse", { id, tokens }, undefined);
+
+/**
+ * Close sessions that have been idle too long.
+ *
+ * The Rust side runs this on a timer as well; this is the manual handle, for a
+ * screen that wants the number to be right now rather than within a minute.
+ * Returns how many were closed.
+ */
+export const sessionsCloseStale = (idleForMs: number) =>
+  call<number>("sessions_close_stale", { idleForMs }, 0);
 export const eventRecord = (kind: string, sessionId?: string, tokens?: number) =>
   call<void>("event_record", { kind, sessionId: sessionId ?? null, tokens: tokens ?? null }, undefined);
 
@@ -151,6 +170,23 @@ export const licenseValidate = () => call<LicenseState>("license_validate", unde
 export const licenseDeactivate = () =>
   call<LicenseState>("license_deactivate", undefined, NO_HOST_LICENSE);
 
+// ── sources ─────────────────────────────────────────────────────────────────
+
+export interface SourceStatus {
+  id: string;
+  label: string;
+  available: boolean;
+  root: string | null;
+  lastReadingAt: number | null;
+}
+
+export const sourcesStatus = () => call<SourceStatus[]>("sources_status", undefined, []);
+
+/** Whether ContextJule is currently Claude Code's status line command. */
+export const statuslineInstalled = () => call<boolean>("statusline_installed", undefined, false);
+export const statuslineInstall = () => call<void>("statusline_install", undefined, undefined);
+export const statuslineUninstall = () => call<void>("statusline_uninstall", undefined, undefined);
+
 // ── windows ─────────────────────────────────────────────────────────────────
 
 export type Surface = "main" | "panel" | "mini-bar" | "tray-flyout" | "overlay";
@@ -160,6 +196,50 @@ export const surfaceHide = (label: Surface) => call<void>("surface_hide", { labe
 export const surfaceToggle = (label: Surface) => call<boolean>("surface_toggle", { label }, false);
 export const surfaceClickThrough = (label: Surface, ignore: boolean) =>
   call<void>("surface_click_through", { label, ignore }, undefined);
+
+export const surfaceVisible = (label: Surface) =>
+  call<boolean>("surface_visible", { label }, false);
+
+/**
+ * Show or hide a surface *and remember the choice*.
+ *
+ * Distinct from `surfaceShow`/`surfaceHide`, which are momentary. This is what
+ * the nudges screen's toggles call, so a window the user turned off stays off
+ * across a restart rather than reappearing on next launch.
+ */
+export const surfaceSetVisible = (label: Surface, visible: boolean) =>
+  call<void>("surface_set_visible", { label, visible }, undefined);
+
+/**
+ * Snap a window to the nearest screen edge if it is within `threshold` pixels.
+ * Called on drag release, which is the only moment it makes sense.
+ */
+export const surfaceSnap = (label: Surface, threshold = 24) =>
+  call<void>("surface_snap", { label, threshold }, undefined);
+
+// ── system ──────────────────────────────────────────────────────────────────
+
+export const autostartEnabled = () => call<boolean>("autostart_enabled", undefined, false);
+export const autostartSet = (enabled: boolean) =>
+  call<void>("autostart_set", { enabled }, undefined);
+
+/**
+ * Put text on the clipboard.
+ *
+ * Used for exactly one thing: handing over a `/clear` when someone taps the
+ * cleanse button. She cannot reach into their chat, so the honest version of
+ * "help her carry this" is to put the command where they can paste it.
+ */
+export async function writeClipboard(text: string): Promise<boolean> {
+  if (!hasHost()) return false;
+  try {
+    const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    await writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Physical screen coordinates of the cursor. Cursor-follow only. */
 export const cursorPosition = () => call<[number, number]>("cursor_position", undefined, [0, 0]);

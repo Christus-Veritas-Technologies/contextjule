@@ -23,7 +23,10 @@ pub enum StoreError {
 }
 
 impl serde::Serialize for StoreError {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
@@ -273,6 +276,36 @@ pub fn session_cleanse(store: &Store, id: &str, now: i64) -> Result<()> {
         params![now, id],
     )?;
     Ok(())
+}
+
+/// She went down. Recorded once per crossing, not once per poll — the caller
+/// owns that, because only it knows the previous state.
+pub fn session_collapse(store: &Store, id: &str, tokens: i64, now: i64) -> Result<()> {
+    let conn = store.0.lock().unwrap();
+    conn.execute(
+        "UPDATE sessions SET collapses = collapses + 1, updated_at = ?2 WHERE id = ?1",
+        params![id, now],
+    )?;
+    conn.execute(
+        "INSERT INTO events (at, kind, session_id, tokens) VALUES (?1, 'collapse', ?2, ?3)",
+        params![now, id, tokens],
+    )?;
+    Ok(())
+}
+
+/// Close out sessions nothing has written to in a while.
+///
+/// Without this `ended_at` stays null forever and "time together" counts every
+/// abandoned session as still running, which inflates it badly on the growth
+/// screen. Called on a timer and at shutdown.
+pub fn end_stale_sessions(store: &Store, idle_for_ms: i64, now: i64) -> Result<usize> {
+    let conn = store.0.lock().unwrap();
+    let closed = conn.execute(
+        "UPDATE sessions SET ended_at = updated_at
+         WHERE ended_at IS NULL AND ?1 - updated_at > ?2",
+        params![now, idle_for_ms],
+    )?;
+    Ok(closed)
 }
 
 // ── events and stats ────────────────────────────────────────────────────────

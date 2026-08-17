@@ -8,12 +8,17 @@
 //! file that has it, and that is deliberate.
 
 mod license;
+mod sources;
+mod statusline;
 mod store;
 mod tray;
 mod windows;
 
 use serde::Serialize;
 use store::{Session, SessionUpsert, Stats, Store};
+use std::sync::mpsc;
+
+use sources::{SourceRunner, SourceStatus};
 use tauri::{Emitter, Manager, WindowEvent};
 
 // ── identity ────────────────────────────────────────────────────────────────
@@ -217,6 +222,39 @@ async fn license_deactivate(
     license::deactivate(&store).await
 }
 
+// ── sources ─────────────────────────────────────────────────────────────────
+
+/// Which readers are present, and where they are looking.
+///
+/// This doubles as the honest answer to "it is not working": the settings
+/// screen lists every source and whether its directory exists, so nobody has to
+/// guess why she is not watching anything.
+#[tauri::command]
+fn sources_status() -> Vec<SourceStatus> {
+    SourceRunner::new().status()
+}
+
+/// Whether ContextJule is currently Claude Code's status line command.
+#[tauri::command]
+fn statusline_installed() -> bool {
+    statusline::is_installed()
+}
+
+#[tauri::command]
+fn statusline_install() -> Result<(), String> {
+    statusline::install()
+}
+
+#[tauri::command]
+fn statusline_uninstall() -> Result<(), String> {
+    statusline::uninstall()
+}
+
+/// The `--statusline` process mode. See `statusline.rs`.
+pub fn run_statusline() {
+    statusline::run();
+}
+
 // ── window commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -268,6 +306,71 @@ fn set_load_state(app: tauri::AppHandle, state: String) -> tauri::Result<()> {
     Ok(())
 }
 
+/// She went down. The caller owns the edge detection, because only the frontend
+/// knows what the previous load state was.
+#[tauri::command]
+fn session_collapse(store: tauri::State<'_, Store>, id: String, tokens: i64) -> store::Result<()> {
+    store::session_collapse(&store, &id, tokens, now())
+}
+
+#[tauri::command]
+fn sessions_close_stale(store: tauri::State<'_, Store>, idle_for_ms: i64) -> store::Result<usize> {
+    store::end_stale_sessions(&store, idle_for_ms, now())
+}
+
+#[tauri::command]
+fn surface_visible(app: tauri::AppHandle, label: String) -> bool {
+    windows::is_visible(&app, &label)
+}
+
+/// Show or hide a surface and remember the choice for next launch.
+#[tauri::command]
+fn surface_set_visible(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Store>,
+    label: String,
+    visible: bool,
+) -> tauri::Result<()> {
+    if visible {
+        windows::show(&app, &label)?;
+    } else {
+        windows::hide(&app, &label)?;
+    }
+    windows::remember_visible(&store, &label, visible);
+    Ok(())
+}
+
+/// Park a window against the nearest screen edge.
+#[tauri::command]
+fn surface_snap(app: tauri::AppHandle, label: String, threshold: i32) -> tauri::Result<()> {
+    if let Some(window) = windows::get(&app, &label) {
+        windows::snap_to_edge(&window, threshold)?;
+    }
+    Ok(())
+}
+
+/// Start with the machine.
+///
+/// Read through the plugin rather than mirrored into our settings table: the
+/// operating system is the source of truth here, and a user who turns it off in
+/// their own login items should see that reflected.
+#[tauri::command]
+fn autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
+}
+
 // ── entry point ─────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -276,6 +379,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // MacosLauncher is ignored off macOS. No extra args: the app decides
+        // for itself whether to show a window on a login start.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             app_info,
             machine_id,
@@ -287,6 +397,8 @@ pub fn run() {
             sessions_list,
             session_end,
             session_cleanse,
+            session_collapse,
+            sessions_close_stale,
             event_record,
             stats,
             unlocks_list,
@@ -300,8 +412,17 @@ pub fn run() {
             surface_toggle,
             surface_click_through,
             surface_position,
+            surface_visible,
+            surface_set_visible,
+            surface_snap,
             cursor_position,
             set_load_state,
+            autostart_enabled,
+            autostart_set,
+            sources_status,
+            statusline_installed,
+            statusline_install,
+            statusline_uninstall,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -317,6 +438,23 @@ pub fn run() {
 
             tray::build(&handle)?;
 
+            // Reopen whatever was open last time, then start the janitor that
+            // closes sessions nothing has written to. Without it `ended_at`
+            // stays null forever and "time together" counts every abandoned
+            // session as still running.
+            if let Some(store) = handle.try_state::<Store>() {
+                windows::restore_visibility(&handle, &store);
+            }
+
+            let janitor = handle.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+                if let Some(store) = janitor.try_state::<Store>() {
+                    // Thirty minutes with no new tokens means the session is over.
+                    let _ = store::end_stale_sessions(&store, 30 * 60 * 1000, now());
+                }
+            });
+
             // The overlay is a transparent rectangle much larger than she is.
             // It starts click-through so it never eats a click meant for the
             // desktop; the frontend releases it while the cursor is over her.
@@ -330,6 +468,14 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } if window.label() == windows::MAIN => {
                 api.prevent_close();
                 let _ = window.hide();
+            }
+            WindowEvent::CloseRequested { api, .. } if window.label() != windows::MAIN => {
+                // Dismissing a compact surface is a preference, not a crash.
+                api.prevent_close();
+                let _ = window.hide();
+                if let Some(store) = window.app_handle().try_state::<Store>() {
+                    windows::remember_visible(&store, window.label(), false);
+                }
             }
             WindowEvent::Moved(position) => {
                 if let Some(store) = window.app_handle().try_state::<Store>() {

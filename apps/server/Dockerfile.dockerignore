@@ -1,0 +1,55 @@
+# Ignore rules for `docker build -f apps/server/Dockerfile .`
+#
+# The name matters. Docker reads `.dockerignore` from the root of the build
+# context, and this image is built from the monorepo root — so a file at
+# apps/server/.dockerignore would be silently ignored. BuildKit (default since
+# Docker 23, and what Coolify uses) looks for `<dockerfile-path>.dockerignore`
+# first, which is what lets each app have its own list.
+
+# --- never ------------------------------------------------------------------
+.git
+.github
+**/node_modules
+**/.turbo
+**/.next
+**/dist
+**/*.tsbuildinfo
+
+# The generated Prisma client. It is rebuilt inside the image by
+# `pnpm --filter @contextjule/db db:generate`, and a host-built copy carries
+# the host's platform binaries — which on a Windows or macOS machine are the
+# wrong ones for this Debian image.
+packages/db/prisma/generated
+
+# Secrets. Every one of them is injected at container start; none is needed at
+# build time. A stray .env in the context is one COPY away from being baked
+# into a layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- not part of this image -------------------------------------------------
+# The Tauri app. src-tauri/target alone is gigabytes of Rust build output.
+apps/desktop
+# The marketing site. Its own image builds from apps/web/Dockerfile.
+apps/web
+# React components, fonts and the sprite engine — nothing the API imports.
+packages/ui
+
+# The design archive: ~100 PNGs and four multi-hundred-kilobyte HTML sheets.
+designs
+docs
+scripts
+
+# --- noise ------------------------------------------------------------------
+**/.DS_Store
+**/*.log
+**/coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+README.md
+AGENTS.md
+docker-compose.yml
+biome.json
+bts.jsonc

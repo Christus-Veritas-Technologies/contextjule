@@ -1,12 +1,9 @@
-import { MiniBar } from "@contextjule/ui/components/mini-bar";
-import { Scene } from "@contextjule/ui/components/scene";
-import { formatPrice } from "@contextjule/core/format";
-import { PRICE } from "@contextjule/core/pricing";
-import { env } from "@contextjule/env/web";
-
-import { BuyButton } from "@/components/buy-button";
-import Header from "@/components/header";
-import { StateStrip } from "@/components/state-strip";
+import { HeroStage } from "@/components/hero-stage";
+import { PromoCta } from "@/components/promo-cta";
+import { WhatItGivesYou, WhatItIs, WhatYouSee } from "@/components/sections";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteNav } from "@/components/site-nav";
+import { fetchPromo } from "@/lib/api";
 
 /**
  * The landing page.
@@ -14,97 +11,68 @@ import { StateStrip } from "@/components/state-strip";
  * Four bands under the hero, each a different daylight colour, so scrolling
  * reads as time passing rather than as one long dark page. The hero band is her
  * stage, not a picture of her.
+ *
+ * The promotion is fetched on the server so the first paint already has the
+ * right number in the button — a counter that appears a beat after the page
+ * does is a counter people scroll past. It is then kept live over a stream.
  */
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const promo = await fetchPromo();
+
   return (
     <main className="min-h-svh bg-night">
-      <Header />
+      <SiteNav promo={promo} />
 
-      {/* Hero. She walks the band; the copy sits on a layer above her. */}
-      <section className="relative isolate overflow-hidden border-y-3 border-ink">
-        <Scene className="h-[420px]" scale={5} action="walk" grassHeight={120} />
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-6 px-6 md:px-14">
-          <h1 className="max-w-[16ch] font-pixel text-[26px] leading-[1.35] text-ink-soft md:text-[38px]">
-            she carries your context so you can feel it
-          </h1>
-          <p className="max-w-[46ch] text-[15px] leading-[1.6] text-ink-soft/80">
-            Context length is the one number that decides whether a session is going well, and
-            nothing shows it to you. Jule turns it into a character on your desktop.
-          </p>
-          <div className="pointer-events-auto flex items-center gap-5">
-            <BuyButton>buy now · {formatPrice(PRICE.launch)}</BuyButton>
-            <span className="font-pixel text-[11px] text-ink-soft/60 line-through">
-              {formatPrice(PRICE.full)}
-            </span>
-          </div>
-          {env.NEXT_PUBLIC_LAUNCH_ENDS ? (
-            <span className="font-pixel text-[9px] text-ink-soft/70">
-              launch price ends {env.NEXT_PUBLIC_LAUNCH_ENDS}
-            </span>
-          ) : null}
+      <HeroStage>
+        <div className="inline-flex items-center gap-2 self-start bg-ink-soft px-3 py-[7px] shadow-[3px_3px_0_rgba(34,27,44,0.35)]">
+          <span aria-hidden className="block size-[8px] bg-fresh" />
+          <span className="font-pixel text-[9px] text-[#e8e2d6] md:text-[10px]">
+            she lives on your desktop, not in a browser tab
+          </span>
         </div>
-      </section>
 
-      {/* What it is. Warm parchment, hard tan shadows. */}
-      <section className="border-b-3 border-ink bg-[#f6ead6] px-6 py-20 md:px-14" data-band="">
-        <div className="mx-auto flex max-w-[1100px] flex-col gap-10">
-          <h2 className="font-pixel text-[16px] text-ink-soft">what it is</h2>
-          <div className="grid gap-6 md:grid-cols-3">
-            {[
-              ["Local, always", "It reads session length on your machine. No session text ever leaves the computer."],
-              ["Never types", "She watches and reacts. She never touches your chat, your files or your clipboard."],
-              ["One price", "No subscription, no account, no sign-in. Buy it once and it is yours."],
-            ].map(([title, body]) => (
-              <div key={title} className="flex flex-col gap-3 border-3 border-ink-soft bg-cream-raised p-6 shadow-[6px_6px_0_#d9c4a4]">
-                <span className="font-pixel text-[11px] text-ink-soft">{title}</span>
-                <p className="text-[13px] leading-[1.6] text-[#6b5b48]">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        <h1 className="font-pixel text-[27px] leading-[1.24] tracking-[-0.5px] text-[#1b1526] [text-shadow:3px_3px_0_rgba(255,255,255,0.4)] sm:text-[32px] lg:text-[40px]">
+          Never lose
+          <br />
+          a good session
+          <br />
+          again.
+        </h1>
 
-      {/* What you see. Dusk purple, the four load states. */}
-      <section className="border-b-3 border-ink bg-[#241d38] px-6 py-20 md:px-14">
-        <div className="mx-auto flex max-w-[1100px] flex-col gap-10">
-          <h2 className="font-pixel text-[16px] text-[#f4efe9]">what you see</h2>
-          <StateStrip />
-        </div>
-      </section>
+        <p className="max-w-[440px] text-[15px] leading-[1.6] font-medium text-pretty text-[#1d2c44] md:text-[16px]">
+          Jule sits at the edge of your screen and quietly carries your chat for you. When it starts
+          getting heavy, she stoops — and you find out in time to save the thread, instead of after
+          you have already lost it.
+        </p>
 
-      {/* What it gives you. Sky blue, the mini bar at its shipping size. */}
-      <section className="border-b-3 border-ink bg-sky px-6 py-20 md:px-14" data-band="sky">
-        <div className="mx-auto flex max-w-[1100px] flex-col items-start gap-10">
-          <h2 className="font-pixel text-[16px] text-sky-ink">what it gives you</h2>
-          <p className="max-w-[52ch] text-[15px] leading-[1.6] text-[#3d4f61]">
-            A strip that lives above everything else, at the size it actually ships at. Four load
-            states set the meter colour and her pose; six activity types swap her frame and her line.
-          </p>
-          <div className="flex flex-wrap gap-8">
-            <MiniBar tokens={3_100} activity="idle" />
-            <MiniBar tokens={48_200} activity="streaming" />
-            <MiniBar tokens={168_200} activity="overload" />
-          </div>
-        </div>
-      </section>
+        <PromoCta promo={promo} size="xl" anchorId="buy" />
+      </HeroStage>
+
+      <WhatItIs />
+      <WhatYouSee />
+      <WhatItGivesYou />
 
       {/* Price. Grass green, the CTA repeated at full size. */}
-      <section id="price" className="bg-[#5aa84f] px-6 py-24 md:px-14">
-        <div className="mx-auto flex max-w-[1100px] flex-col items-center gap-6 text-center">
-          <h2 className="font-pixel text-[16px] text-ink-soft">one price, then it is yours</h2>
-          <div className="flex items-baseline gap-4">
-            <span className="font-pixel text-[38px] text-ink-soft">{formatPrice(PRICE.launch)}</span>
-            <span className="font-pixel text-[16px] text-ink-soft/60 line-through">
-              {formatPrice(PRICE.full)}
-            </span>
-          </div>
-          <BuyButton>buy now</BuyButton>
-          <p className="max-w-[42ch] text-[13px] leading-[1.6] text-ink-soft/80">
-            Windows and macOS. Your key arrives by email and works on your machines — there is no
-            account to make.
+      <section className="relative overflow-hidden border-t-[6px] border-[#6dbd5e] bg-[#5aa84f] px-5 pt-16 pb-24 md:px-10 md:pt-24 md:pb-[150px]">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-[70px] bg-[#4f9846]" />
+        <div className="relative z-[2] mx-auto flex max-w-[660px] flex-col items-center gap-6 text-center">
+          <span className="font-pixel text-[11px] text-[#1f3c1c]">
+            one price, one friend, yours to keep
+          </span>
+          <h2 className="font-pixel text-[24px] leading-[1.28] text-[#152a12] [text-shadow:3px_3px_0_rgba(255,255,255,0.35)] md:text-[34px]">
+            Take her home once. She stays.
+          </h2>
+          <p className="text-[15px] leading-[1.65] font-medium text-pretty text-[#1d3719] md:text-[16px]">
+            No subscription, no account to make, nothing to remember to cancel. Windows and macOS,
+            twenty little animations, and every one of her moods above.
           </p>
+          <PromoCta promo={promo} size="xl" align="center" />
         </div>
       </section>
+
+      <SiteFooter />
     </main>
   );
 }

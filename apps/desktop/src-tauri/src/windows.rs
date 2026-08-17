@@ -63,6 +63,37 @@ pub fn toggle(app: &AppHandle, label: &str) -> tauri::Result<bool> {
     }
 }
 
+pub fn is_visible(app: &AppHandle, label: &str) -> bool {
+    get(app, label).and_then(|w| w.is_visible().ok()).unwrap_or(false)
+}
+
+/// Which surfaces should come back next launch.
+///
+/// Stored as a setting rather than inferred, because "it was open when I quit"
+/// and "I want it open" are the same intent for a pet that lives in the tray.
+pub fn remember_visible(store: &Store, label: &str, visible: bool) {
+    let _ = store::settings_set(store, &format!("window.{label}.visible"), &visible.to_string());
+}
+
+pub fn wants_visible(store: &Store, label: &str) -> bool {
+    store::settings_get(store, &format!("window.{label}.visible"))
+        .ok()
+        .flatten()
+        .map(|value| value == "true")
+        .unwrap_or(false)
+}
+
+/// Reopen whatever was open last time. `main` is handled separately — it always
+/// shows on a fresh launch, because a first run with nothing visible looks
+/// exactly like a crash.
+pub fn restore_visibility(app: &AppHandle, store: &Store) {
+    for label in [PANEL, MINI_BAR, OVERLAY] {
+        if wants_visible(store, label) {
+            let _ = show(app, label);
+        }
+    }
+}
+
 /// Remember where a window was left.
 pub fn remember_position(store: &Store, label: &str, x: i32, y: i32) {
     let value = serde_json::to_string(&SavedPosition { x, y }).unwrap_or_default();

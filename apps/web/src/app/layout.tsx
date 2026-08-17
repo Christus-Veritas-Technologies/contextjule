@@ -12,25 +12,34 @@ import "../index.css";
  * sections below the hero opt into their own colours.
  */
 export const metadata: Metadata = {
-  title: "ContextJule — a desktop pet that reads your AI context window",
+  metadataBase: new URL("https://contextjule.com"),
+  title: "ContextJule — never lose a good session again",
   description:
-    "Context length is the one number that decides whether a session is going well, and nothing shows it to you. Jule carries the weight herself, on your desktop, entirely locally.",
+    "Jule is a little friend who lives on your desktop and carries your chat for you. When it starts getting heavy she stoops, so you find out in time to save the thread instead of after you have lost it.",
   openGraph: {
     title: "ContextJule",
-    description: "A desktop pet that reads your AI context window.",
+    description: "A little friend who carries your chat so you do not have to.",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ContextJule",
+    description: "A little friend who carries your chat so you do not have to.",
   },
 };
 
 export const viewport: Viewport = {
   themeColor: "#141119",
   colorScheme: "light",
+  // The hero is a fixed composition measured in pixels; letting a phone scale
+  // it beyond a point turns her into a blur, and she is pixel art.
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-band="night">
-      <body className="min-h-svh antialiased">
+      <body className="min-h-svh overflow-x-hidden antialiased">
         {children}
         <Toaster position="bottom-right" />
       </body>

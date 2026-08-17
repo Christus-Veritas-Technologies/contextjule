@@ -1,0 +1,52 @@
+# Ignore rules for `docker build -f apps/web/Dockerfile .`
+#
+# The name matters. Docker reads `.dockerignore` from the root of the build
+# context, and this image is built from the monorepo root — so a file at
+# apps/web/.dockerignore would be silently ignored. BuildKit (default since
+# Docker 23, and what Coolify uses) looks for `<dockerfile-path>.dockerignore`
+# first, which is what lets each app have its own list.
+
+# --- never ------------------------------------------------------------------
+.git
+.github
+**/node_modules
+**/.turbo
+**/.next
+**/dist
+**/*.tsbuildinfo
+
+# Secrets. The image takes NEXT_PUBLIC_SERVER_URL as a build arg and nothing
+# else; a stray .env in the context is a secret one COPY away from being baked
+# into a layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- not part of this image -------------------------------------------------
+# The Tauri app. src-tauri/target alone is gigabytes of Rust build output, and
+# none of it is reachable from the site.
+apps/desktop
+# The API. Its own image builds from apps/server/Dockerfile.
+apps/server
+# No database dependency here — see the Dockerfile's package list.
+packages/db
+
+# The design archive: ~100 PNGs and four multi-hundred-kilobyte HTML sheets.
+# The sprite engine is vendored into packages/ui, so nothing at build time
+# reads this.
+designs
+docs
+scripts
+
+# --- noise ------------------------------------------------------------------
+**/.DS_Store
+**/*.log
+**/coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+README.md
+AGENTS.md
+docker-compose.yml
+biome.json
+bts.jsonc

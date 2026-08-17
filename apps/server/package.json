@@ -7,7 +7,8 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.mjs"
+    "start": "bun run dist/index.mjs",
+    "test": "bun test"
   },
   "dependencies": {
     "@contextjule/core": "workspace:*",
@@ -16,11 +17,13 @@
     "dodopayments": "^2.46.0",
     "dotenv": "catalog:",
     "hono": "^4.12.32",
+    "nodemailer": "^7.0.9",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@contextjule/config": "workspace:*",
     "@types/bun": "catalog:",
+    "@types/nodemailer": "^7.0.4",
     "tsdown": "^0.22.14",
     "typescript": "catalog:"
   }
