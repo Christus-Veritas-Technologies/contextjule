@@ -1,4 +1,5 @@
 export * from "./activity";
+export * from "./behaviour";
 export * from "./context";
 export * from "./downloads";
 export * from "./format";
