@@ -2,9 +2,9 @@ import prisma from "@contextjule/db";
 import { env } from "@contextjule/env/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 
 import { ApiError, clientIp } from "./lib/http";
+import { preflight } from "./lib/preflight";
 import { RateLimiter, rateLimit } from "./lib/rate-limit";
 import { checkoutRoutes } from "./routes/checkout";
 import { downloadRoutes } from "./routes/downloads";
@@ -13,9 +13,39 @@ import { promoRoutes } from "./routes/promo";
 import { releaseRoutes } from "./routes/releases";
 import { webhookRoutes } from "./routes/webhooks";
 
-const app = new Hono();
+const app = new Hono<{ Variables: { requestId: string } }>();
 
-app.use(logger());
+/**
+ * Every request, one line: method, path, status, duration.
+ *
+ * Hono's logger already does that. What it does not do is give you a handle on
+ * a single request when a customer says "my checkout failed at 3pm" — so each
+ * one gets an id, echoed back in `x-request-id` and printed alongside. A caller
+ * that sends its own is honoured, which is what makes a trace survive a hop
+ * from the site to this API.
+ */
+app.use("*", async (c, next) => {
+  const id = c.req.header("x-request-id") ?? crypto.randomUUID().slice(0, 8);
+  c.set("requestId", id);
+  c.header("x-request-id", id);
+  const started = Date.now();
+  await next();
+  // Webhook and licence failures are the ones worth finding in a log, so the
+  // level tracks the status rather than being flat.
+  const line = `[${id}] ${c.req.method} ${c.req.path} ${c.res.status} ${Date.now() - started}ms`;
+  if (c.res.status >= 500) console.error(line);
+  else if (c.res.status >= 400) console.warn(line);
+  else console.info(line);
+});
+
+
+/**
+ * Prove the credentials work before a customer does it for us. Fire and forget:
+ * a slow SMTP handshake must not delay the first request, and a failure is
+ * logged rather than fatal — see lib/preflight.ts for why refusing to boot
+ * would be the worse outage.
+ */
+void preflight();
 
 /**
  * CORS covers the marketing site only. The desktop app is not a browser origin
