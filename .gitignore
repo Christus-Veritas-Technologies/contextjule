@@ -50,6 +50,20 @@ lerna-debug.log*
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
 
+# Tauri updater signing keys.
+#
+# The most dangerous file this repo could ever contain. Anyone holding the
+# private key can sign an update that every installed copy will trust and
+# install without asking — it is a remote code execution primitive on every
+# customer's machine, not just a credential. Generate it outside the repo
+# (`~/.tauri/`) and keep the only copy in the TAURI_SIGNING_PRIVATE_KEY secret;
+# these patterns are the second line of defence, not the first.
+*.key
+!*.key.example
+updater.key*
+tauri-updater.key*
+.tauri/
+
 # Better-T-Stack
 .alchemy
 .vercel
