@@ -28,16 +28,30 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use crate::store::{Store, StoreError};
 
 /// Baked in at build time so a release points at production without a config
-/// file the user could break. Override for local work with
-/// `CONTEXTJULE_API_URL=http://localhost:3000 pnpm dev`.
+/// file the user could break.
+///
+/// The default is the live API, and it has to be: `option_env!` resolves at
+/// compile time, so a build that forgets to set `CONTEXTJULE_API_URL` silently
+/// ships whatever is written here. A localhost default would mean every
+/// installer built outside CI validated licences against a machine that is not
+/// the customer's — failing closed, on a paid copy.
+///
+/// Override for local work with:
+///   `CONTEXTJULE_API_URL=http://localhost:3000 pnpm dev:desktop`
 fn api_base() -> String {
     option_env!("CONTEXTJULE_API_URL")
-        .unwrap_or("https://api.contextjule.com")
+        .unwrap_or("https://api-contextjule.gamesforstrangers.lol")
         .trim_end_matches('/')
         .to_string()
 }
 
 /// Dodo's public endpoints, used only when our own API cannot be reached.
+///
+/// Live by default for the same reason as above. While the product is still in
+/// Dodo's test mode, build with:
+///   `CONTEXTJULE_DODO_URL=https://test.dodopayments.com`
+/// otherwise the fallback path validates test keys against the live service and
+/// reports every one of them as invalid.
 fn dodo_base() -> String {
     option_env!("CONTEXTJULE_DODO_URL")
         .unwrap_or("https://live.dodopayments.com")
