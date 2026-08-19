@@ -66,7 +66,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
 
+      # `--filter contextjule` matched TWO projects: apps/desktop is named
+      # `contextjule`, and so is the workspace root. pnpm ran the command in both,
+      # and the root has no `tauri` on its PATH — hence "Command tauri not found /
+      # Did you mean pnpm exec turbo", which is the root's bin list talking. Naming
+      # the directory instead of the package removes the ambiguity entirely.
       - name: Build desktop (Tauri)
+        working-directory: apps/desktop
         env:
           # Signing the updater artifacts. Both are secrets — never inline the
           # password, it is as sensitive as the key it unlocks.
@@ -76,7 +82,7 @@ jobs:
           # somewhere else by editing a file on disk.
           CONTEXTJULE_API_URL: ${{ secrets.CONTEXTJULE_API_URL }}
           CONTEXTJULE_DODO_URL: ${{ secrets.CONTEXTJULE_DODO_URL }}
-        run: pnpm --filter contextjule exec tauri build --target ${{ matrix.target }}
+        run: pnpm exec tauri build --target ${{ matrix.target }}
 
       - name: Collect artifacts (Windows)
         if: matrix.platform == 'windows'

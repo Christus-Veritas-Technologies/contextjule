@@ -4,6 +4,35 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 12 — two packages are called `contextjule`
+
+**`pnpm --filter contextjule exec tauri build` matched two projects.**
+`apps/desktop` is named `contextjule`, and so is the workspace root. pnpm ran
+the command in both; the root has no `tauri` on its PATH, so the job died with
+*Command "tauri" not found — Did you mean pnpm exec turbo?*. That suggestion is
+the tell: `turbo` is a **root** bin, so the shell it was complaining about was
+never `apps/desktop`. On Windows both halves ran and the log interleaved a
+working tauri build with a cmd-level `'tauri' is not recognized`, which reads
+like a broken install and is not one.
+
+Fixed by naming the directory instead of the package:
+`working-directory: apps/desktop` + `pnpm exec tauri build`. The root package
+is still called `contextjule` — rename it if this bites a third time.
+
+Verified before pushing this time, in a Linux container with the real
+lockfile: `pnpm install --frozen-lockfile` links `tauri` into
+`apps/desktop/node_modules/.bin` exactly as expected, and the whole
+beforeBuildCommand — `tsc --noEmit && vite build` — passes clean. The Rust
+side is what is still unproven end to end.
+
+**Still open:** `tauri.conf.json` sets the bundle identifier to
+`com.contextjule.app`, and tauri warns on every build that ending an
+identifier in `.app` collides with the macOS application bundle extension.
+Nothing has shipped, so changing it now costs one local database; changing it
+after release orphans every customer's.
+
+---
+
 ## Session 11 — the release workflow was never a valid file
 
 **`if: ${{ secrets.R2_ACCOUNT_ID != '' }}` is not a failing step, it is a
