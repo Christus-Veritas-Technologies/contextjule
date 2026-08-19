@@ -132,7 +132,11 @@ impl Store {
 pub fn settings_get(store: &Store, key: &str) -> Result<Option<String>> {
     let conn = store.0.lock().unwrap();
     Ok(conn
-        .query_row("SELECT value FROM settings WHERE key = ?1", params![key], |r| r.get(0))
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![key],
+            |r| r.get(0),
+        )
         .optional()?)
 }
 
@@ -260,7 +264,10 @@ pub fn sessions_list(store: &Store, since: Option<i64>, limit: i64) -> Result<Ve
 
 pub fn session_end(store: &Store, id: &str, now: i64) -> Result<()> {
     let conn = store.0.lock().unwrap();
-    conn.execute("UPDATE sessions SET ended_at = ?2, updated_at = ?2 WHERE id = ?1", params![id, now])?;
+    conn.execute(
+        "UPDATE sessions SET ended_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![id, now],
+    )?;
     Ok(())
 }
 
@@ -310,7 +317,13 @@ pub fn end_stale_sessions(store: &Store, idle_for_ms: i64, now: i64) -> Result<u
 
 // ── events and stats ────────────────────────────────────────────────────────
 
-pub fn event_record(store: &Store, kind: &str, session_id: Option<&str>, tokens: Option<i64>, now: i64) -> Result<()> {
+pub fn event_record(
+    store: &Store,
+    kind: &str,
+    session_id: Option<&str>,
+    tokens: Option<i64>,
+    now: i64,
+) -> Result<()> {
     let conn = store.0.lock().unwrap();
     conn.execute(
         "INSERT INTO events (at, kind, session_id, tokens) VALUES (?1, ?2, ?3, ?4)",

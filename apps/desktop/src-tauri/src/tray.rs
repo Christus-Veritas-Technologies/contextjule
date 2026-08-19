@@ -62,11 +62,20 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open ContextJule", true, None::<&str>)?;
     let panel = MenuItem::with_id(app, "panel", "Panel", true, None::<&str>)?;
     let mini_bar = MenuItem::with_id(app, "mini-bar", "Mini bar", true, None::<&str>)?;
-    let overlay = MenuItem::with_id(app, "overlay", "Show her on the desktop", true, None::<&str>)?;
+    let overlay = MenuItem::with_id(
+        app,
+        "overlay",
+        "Show her on the desktop",
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&open, &panel, &mini_bar, &overlay, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &panel, &mini_bar, &overlay, &separator, &quit],
+    )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON_IDLE)?)
