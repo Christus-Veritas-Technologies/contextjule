@@ -77,16 +77,26 @@ app.use(
  * exist so one loop cannot spend a ceiling that belongs to everyone.
  */
 const MINUTE = 60_000;
-const checkoutLimiter = new RateLimiter(10, MINUTE);
-const licenseLimiter = new RateLimiter(30, MINUTE);
-const downloadLimiter = new RateLimiter(20, MINUTE);
+/**
+ * Doubled after the first production run tripped them.
+ *
+ * The original numbers were sized against one person clicking. They are shared
+ * per IP, and a real visitor behind CGNAT, a corporate proxy or a shared office
+ * connection arrives as the same address as everyone else there — so the limit
+ * that felt generous for one user is a quarter of that for four of them. These
+ * exist to stop a loop, not to ration ordinary use, and a rate limit that
+ * blocks a paying customer costs far more than the burst it prevented.
+ */
+const checkoutLimiter = new RateLimiter(20, MINUTE);
+const licenseLimiter = new RateLimiter(60, MINUTE);
+const downloadLimiter = new RateLimiter(40, MINUTE);
 /**
  * Generous, because an SSE connection that drops reconnects on its own every
  * few seconds and a visitor watching the counter is doing nothing wrong. The
  * shared poller means the database cost here is flat regardless of how many
  * browsers are subscribed.
  */
-const promoLimiter = new RateLimiter(90, MINUTE);
+const promoLimiter = new RateLimiter(180, MINUTE);
 
 app.use("/api/checkout/*", rateLimit(checkoutLimiter, clientIp));
 app.use("/api/licenses/*", rateLimit(licenseLimiter, clientIp));

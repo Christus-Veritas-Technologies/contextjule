@@ -103,6 +103,46 @@ export async function claimFreeCopy(at: Date = new Date()): Promise<PromoState> 
 }
 
 /**
+ * Change the counter, from inside the network.
+ *
+ * The database is reachable only from the deployment, so the CLI in
+ * `packages/db` cannot touch production from a laptop. This is the same set of
+ * operations exposed over HTTP behind the admin token, so there is one mental
+ * model for both — and no reason to open the database to the internet to move
+ * a number.
+ *
+ * `reset` and `close` are opposites; `reset` wins if both arrive, rather than
+ * the two silently fighting over freeClosedAt.
+ */
+export async function updatePromo(input: {
+  freeLimit?: number;
+  freeClaimed?: number;
+  discountHours?: number;
+  active?: boolean;
+  reset?: boolean;
+  close?: boolean;
+}): Promise<PromoState> {
+  // Ensures the row exists before the update, so a fresh deployment can be
+  // configured before anyone has ever hit /api/promo.
+  await promoRecord(true);
+
+  await prisma.promo.update({
+    where: { slug: PROMO_SLUG },
+    data: {
+      ...(input.freeLimit !== undefined ? { freeLimit: input.freeLimit } : {}),
+      ...(input.freeClaimed !== undefined ? { freeClaimed: input.freeClaimed } : {}),
+      ...(input.discountHours !== undefined ? { discountHours: input.discountHours } : {}),
+      ...(input.active !== undefined ? { active: input.active } : {}),
+      ...(input.reset ? { freeClaimed: 0, freeClosedAt: null } : {}),
+      ...(input.close && !input.reset ? { freeClosedAt: new Date() } : {}),
+    },
+  });
+
+  invalidate();
+  return currentPromo();
+}
+
+/**
  * How long until the state could next change on its own.
  *
  * Used to pace the live stream. In the free phase nothing changes without a

@@ -175,7 +175,7 @@ async function handlePayment(event: DodoEvent, succeeded: boolean): Promise<bool
   // Close the loop on the checkout row we wrote before the redirect. Without
   // this every checkout stays `created` forever and the thanks page has no way
   // to tell a completed purchase from an abandoned one.
-  await linkCheckout({
+  const checkout = await linkCheckout({
     sessionId: fields.checkoutSessionId,
     email: customer.email,
     customerId: customer.id,
@@ -185,12 +185,32 @@ async function handlePayment(event: DodoEvent, succeeded: boolean): Promise<bool
 
   if (!succeeded) return true;
 
-  // One free copy has actually gone out. Counted here rather than at checkout
-  // because a session that was created and abandoned has not taken a copy from
-  // anyone — and `firstTime` is what stops a webhook replay from spending
-  // someone else's place in the hundred.
-  if (firstTime && payment.totalMinor === 0) {
+  // One free copy has actually gone out.
+  //
+  // Counted on the webhook rather than at checkout, because a session that was
+  // created and abandoned has not taken a copy from anyone — and `firstTime` is
+  // what stops a replay from spending someone else's place in the hundred.
+  //
+  // The test is the offer the SITE promised, not only the amount that cleared.
+  // Counting zero-amount payments alone was wrong: the phase lives in our Promo
+  // row while the price lives in the Dodo product, and if the product has not
+  // been set to zero yet then every "free" claim charges full price and the
+  // counter never moves — the giveaway runs forever and nobody notices.
+  const promisedFree = checkout?.offer === "free";
+  if (firstTime && (promisedFree || payment.totalMinor === 0)) {
     await claimFreeCopy(payment.paidAt ?? new Date());
+  }
+
+  // Loud, because it means the two halves of the price disagree: the site is
+  // advertising a free copy and Dodo is charging for it. The customer has been
+  // billed for something they were told was free, which is a refund and an
+  // apology — not something to discover from a support email a week later.
+  if (promisedFree && payment.totalMinor > 0) {
+    console.error(
+      `[promo] MISMATCH — checkout ${payment.checkoutId ?? "?"} was sold as free but Dodo charged ` +
+        `${(payment.totalMinor / 100).toFixed(2)} ${payment.currency}. ` +
+        "Set the Dodo product price to 0 for the free phase, or close the phase.",
+    );
   }
 
   // The key may already be here (grant delivered first) or may not be (payment
@@ -346,7 +366,7 @@ async function linkCheckout(input: {
   customerId: string;
   paymentId: string;
   completed: boolean;
-}): Promise<void> {
+}): Promise<{ offer: string } | null> {
   const checkout = input.sessionId
     ? await prisma.checkout.findUnique({ where: { dodoSessionId: input.sessionId } })
     : await prisma.checkout.findFirst({
@@ -354,7 +374,7 @@ async function linkCheckout(input: {
         orderBy: { createdAt: "desc" },
       });
 
-  if (!checkout) return;
+  if (!checkout) return null;
 
   await prisma.checkout.update({
     where: { id: checkout.id },
@@ -372,10 +392,12 @@ async function linkCheckout(input: {
     where: { checkoutId: checkout.id },
     select: { id: true },
   });
-  if (alreadyLinked) return;
+  if (alreadyLinked) return { offer: checkout.offer };
 
   await prisma.payment.update({
     where: { id: input.paymentId },
     data: { checkoutId: checkout.id },
   });
+
+  return { offer: checkout.offer };
 }

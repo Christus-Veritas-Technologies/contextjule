@@ -14,10 +14,30 @@
  * it wins over apps/server/.env, which is what dotenv falls back to.
  */
 import { promoState } from "@contextjule/core/promo";
+import { env } from "@contextjule/env/server";
 
 import prisma from "./index";
 
 const SLUG = "launch";
+
+/**
+ * Which database this is about to change, without the password.
+ *
+ * Printed on every run because the failure it prevents is silent and expensive:
+ * DATABASE_URL falls back to apps/server/.env, which points at localhost, so
+ * `promo --limit 1` against production looks identical to `promo --limit 1`
+ * against your laptop — right up until the live site is still counting down
+ * from a hundred an hour later.
+ */
+function target(): string {
+  try {
+    const url = new URL(env.DATABASE_URL);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return `${url.hostname}${url.port ? `:${url.port}` : ""}${url.pathname}${local ? "   ← LOCAL, not production" : ""}`;
+  } catch {
+    return "unparseable DATABASE_URL";
+  }
+}
 
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`);
@@ -72,6 +92,8 @@ async function main() {
   // Print the resolved phase, not just the row. The row is the input; the phase
   // is what a visitor actually sees, and they are easy to reason about wrongly.
   console.info(`
+  database       ${target()}
+
   slug           ${row.slug}${row.active ? "" : "   (INACTIVE — list price regardless)"}
   free limit     ${row.freeLimit}
   free claimed   ${row.freeClaimed}

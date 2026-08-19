@@ -1,8 +1,11 @@
 import type { PromoState } from "@contextjule/core/promo";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { z } from "zod";
 
-import { currentPromo } from "../services/promo";
+import { requireAdmin } from "../lib/admin";
+import { badRequest } from "../lib/http";
+import { currentPromo, updatePromo } from "../services/promo";
 
 /**
  * The launch sequence, live.
@@ -75,6 +78,54 @@ promoRoutes.get("/", async (c) => {
   // on the one page where the count is the product.
   c.header("cache-control", "no-store");
   return c.json(state);
+});
+
+/**
+ * Move the counter.
+ *
+ * Exists because the database is only reachable from inside the deployment —
+ * the CLI in `packages/db` cannot touch production from a laptop, and opening
+ * Postgres to the internet to change one integer would be a bad trade. Same
+ * operations as the CLI, behind the admin token.
+ *
+ *   { "freeLimit": 1, "reset": true }   one copy, counter back to zero
+ *   { "close": true }                   end the giveaway now, start the 72h
+ *   { "active": false }                 list price, immediately
+ */
+const updateSchema = z
+  .object({
+    freeLimit: z.number().int().min(0).max(1_000_000).optional(),
+    freeClaimed: z.number().int().min(0).max(1_000_000).optional(),
+    discountHours: z.number().int().min(1).max(24 * 365).optional(),
+    active: z.boolean().optional(),
+    reset: z.boolean().optional(),
+    close: z.boolean().optional(),
+  })
+  // An empty body would silently do nothing and report success, which reads as
+  // "it worked" when nothing happened.
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send at least one field to change.",
+  });
+
+promoRoutes.post("/", requireAdmin, async (c) => {
+  const parsed = updateSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    throw badRequest("invalid_body", parsed.error.issues[0]?.message ?? "Nothing to change.");
+  }
+
+  const before = await currentPromo();
+  const after = await updatePromo(parsed.data);
+
+  // Logged because this is the one endpoint that changes what visitors are
+  // charged, and it leaves no other trace.
+  console.warn(
+    `[promo] admin update ${JSON.stringify(parsed.data)} — ` +
+      `${before.phase} ${before.freeClaimed}/${before.freeLimit} -> ` +
+      `${after.phase} ${after.freeClaimed}/${after.freeLimit}`,
+  );
+
+  c.header("cache-control", "no-store");
+  return c.json(after);
 });
 
 promoRoutes.get("/stream", async (c) => {
