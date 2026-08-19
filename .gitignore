@@ -10,7 +10,12 @@ build
 
 # Generated files
 apps/web/src/routeTree.gen.ts
-apps/desktop/src/routeTree.gen.ts
+# apps/desktop/src/routeTree.gen.ts is NOT ignored. `pnpm build` runs
+# `tsc --noEmit` before vite, and only vite's router plugin generates that
+# file — so on a clean checkout tsc fails with "Cannot find module
+# './routeTree.gen'" plus one error per route, and the desktop release never
+# builds. TanStack's own guidance is to commit it; the plugin rewrites it on
+# every dev run, so it cannot drift for long.
 packages/db/prisma/generated
 local.db
 local.db-*
