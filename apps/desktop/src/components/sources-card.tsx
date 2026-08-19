@@ -37,7 +37,7 @@ export function SourcesCard() {
             reload();
             refresh();
           }}
-          className="font-pixel text-[8px] text-[#5b6b7c] underline underline-offset-2"
+          className="cj-press font-pixel text-[8px] text-[#5b6b7c] underline underline-offset-2"
         >
           rescan
         </button>

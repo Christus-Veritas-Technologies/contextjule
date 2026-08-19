@@ -41,6 +41,19 @@ const RITUAL_WINDOW_MS = 6_000;
 /** A session touched this recently is mid-stream. */
 const STREAMING_WINDOW_MS = 2_000;
 
+/**
+ * What "help her carry this" actually does.
+ *
+ * She cannot reach into anyone's chat and clear it — nothing outside the tool
+ * can, and a button that pretended otherwise would be the one dishonest thing
+ * in the product. So the button hands over the command instead: one click, on
+ * your clipboard, paste it where it belongs.
+ */
+const CLEAR_COMMAND = "/clear";
+
+/** How long the surfaces say the command is waiting on the clipboard. */
+const HANDOVER_HOLD_MS = 4_000;
+
 export interface JuleController extends JuleOutput {
   /** Currently displayed speech, or null. Cleared automatically after a hold. */
   speaking: JuleSpeech | null;
@@ -49,6 +62,10 @@ export interface JuleController extends JuleOutput {
   tokens: number;
   windowSize: number;
   cleanse: () => Promise<void>;
+  /** True for a few seconds after a cleanse put `/clear` on the clipboard. */
+  handedOver: boolean;
+  /** The command a cleanse hands over, so surfaces can name it exactly. */
+  clearCommand: string;
   boop: () => void;
   /** Play a reaction. Higher-priority ones interrupt whatever is running. */
   react: (id: ReactionId) => void;
@@ -63,6 +80,7 @@ export function useJule(): JuleController {
 
   const [now, setNow] = useState(() => Date.now());
   const [cleansedAt, setCleansedAt] = useState<number | null>(null);
+  const [handedOverAt, setHandedOverAt] = useState<number | null>(null);
   const [speaking, setSpeaking] = useState<JuleSpeech | null>(null);
   const [reaction, setReaction] = useState<ActiveReaction | null>(null);
 
@@ -235,17 +253,36 @@ export function useJule(): JuleController {
     void ipc.setLoadState(next);
   }, [output.load, output.activity]);
 
+  /**
+   * Hand over the command, and record the cleanse if there is one to record.
+   *
+   * Deliberately not gated on a live session. The clipboard hand-off is the
+   * whole of what the button can do, and it is just as useful before she has
+   * found anything to watch — which is exactly when a disabled control reads
+   * as a broken one. The bookkeeping below is what needs a session, not the
+   * action the user asked for.
+   */
   const cleanse = useCallback(async () => {
-    if (!session) return;
-    setCleansedAt(Date.now());
     lastActivityAt.current = Date.now();
     react("dump");
     // The dump IS the transition down. Arm the gate so the drop to `fresh` that
     // follows does not immediately queue a `cheer` on top of it.
     gate.current = { current: "fresh", lastFiredAt: Date.now() };
+
+    if (await ipc.writeClipboard(CLEAR_COMMAND)) setHandedOverAt(Date.now());
+
+    if (!session) return;
+    setCleansedAt(Date.now());
     await ipc.sessionCleanse(session.id);
     reload();
   }, [session, reload, react]);
+
+  // The confirmation is a message, not a mode: it says its piece and goes.
+  useEffect(() => {
+    if (handedOverAt === null) return;
+    const id = setTimeout(() => setHandedOverAt(null), HANDOVER_HOLD_MS);
+    return () => clearTimeout(id);
+  }, [handedOverAt]);
 
   const boop = useCallback(() => {
     lastActivityAt.current = Date.now();
@@ -261,6 +298,8 @@ export function useJule(): JuleController {
     tokens: tokens ?? 0,
     windowSize,
     cleanse,
+    handedOver: handedOverAt !== null,
+    clearCommand: CLEAR_COMMAND,
     boop,
     react,
     endReaction,

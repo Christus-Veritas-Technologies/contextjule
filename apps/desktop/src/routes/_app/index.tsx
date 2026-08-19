@@ -3,10 +3,9 @@ import { formatDuration, formatTokensExact } from "@contextjule/core/format";
 import { Meter } from "@contextjule/ui/components/meter";
 import { SpeechBox } from "@contextjule/ui/components/speech-box";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 
 import { JuleStage } from "../../components/jule-stage";
-import { hasHost, writeClipboard } from "../../lib/ipc";
+import { hasHost } from "../../lib/ipc";
 import { useJule } from "../../lib/jule";
 import { MOCK_SESSION } from "../../lib/mock";
 
@@ -26,7 +25,6 @@ export const Route = createFileRoute("/_app/")({ component: Home });
 function Home() {
   const jule = useJule();
   const spec = LOAD_STATE_SPECS[jule.load];
-  const [copied, setCopied] = useState(false);
 
   const sample = !jule.live && !hasHost();
   const tokens = sample ? MOCK_SESSION.tokens : jule.tokens;
@@ -38,18 +36,8 @@ function Home() {
       ? jule.action
       : undefined;
 
-  async function cleanse() {
-    await jule.cleanse();
-    // She cannot reach into anyone's chat, so the honest version of "help her
-    // carry this" is handing over the command to paste.
-    if (await writeClipboard("/clear")) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 4_000);
-    }
-  }
-
   return (
-    <div className="flex h-full flex-col">
+    <div className="cj-screen-in flex h-full flex-col">
       <JuleStage
         stageId="home"
         className="h-[352px] shrink-0"
@@ -114,28 +102,38 @@ function Home() {
       </JuleStage>
 
       <div className="flex flex-1 flex-col gap-3 border-t-3 border-ink bg-cream p-4">
-        <div className="flex items-center gap-2.5 border-2 border-[#d9c4a4] bg-[#fffdf8] px-3 py-2.5">
+        {/* The one beat of motion on a click: the caption pops when the
+            command lands on the clipboard, so the hand-off is visible without
+            anything moving while she is only reporting a number. */}
+        <div
+          className={[
+            "flex items-center gap-2.5 border-2 border-[#d9c4a4] bg-[#fffdf8] px-3 py-2.5",
+            jule.handedOver ? "cj-pop" : "",
+          ].join(" ")}
+        >
           <span className="block size-2 shrink-0" style={{ background: spec.accent }} />
           <span className="text-[12px] leading-[1.45] text-[#4c3f31]">
-            {copied ? "Pack down. `/clear` is on your clipboard." : jule.caption}
+            {jule.handedOver
+              ? `Pack down. ${jule.clearCommand} is on your clipboard — paste it into your session.`
+              : jule.caption}
           </span>
         </div>
 
         <div className="flex gap-2.5">
           <button
             type="button"
-            onClick={() => void cleanse()}
-            disabled={!jule.session}
-            className="flex flex-1 items-center justify-center border-3 border-ink-soft bg-gold px-2.5 py-[13px] shadow-hard transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-gold-hover hover:shadow-hard-md active:translate-x-px active:translate-y-px active:shadow-hard-xs disabled:pointer-events-none disabled:opacity-50"
+            onClick={() => void jule.cleanse()}
+            title={`Copies ${jule.clearCommand} to your clipboard`}
+            className="cj-press flex flex-1 items-center justify-center border-3 border-ink-soft bg-gold px-2.5 py-[13px] shadow-hard hover:bg-gold-hover hover:shadow-hard-md active:shadow-hard-xs"
           >
             <span className="font-pixel text-[11px] whitespace-nowrap text-ink-soft">
-              help her carry this
+              {jule.handedOver ? "copied. paste it." : "help her carry this"}
             </span>
           </button>
           <button
             type="button"
             onClick={jule.boop}
-            className="flex items-center justify-center border-3 border-ink-soft bg-[#fffdf8] px-4 py-[13px] shadow-hard-soft transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-[#f6ead6] active:translate-x-px active:translate-y-px"
+            className="cj-press flex items-center justify-center border-3 border-ink-soft bg-[#fffdf8] px-4 py-[13px] shadow-hard-soft hover:bg-[#f6ead6]"
           >
             <span className="font-pixel text-[11px] text-ink-soft">boop</span>
           </button>

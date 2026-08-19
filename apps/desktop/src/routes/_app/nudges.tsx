@@ -55,14 +55,15 @@ function Nudges() {
   return (
     <div
       data-band="sky"
-      className="flex h-full flex-col gap-3 overflow-y-auto p-4"
+      className="cj-screen-in flex h-full flex-col gap-3 overflow-y-auto p-4"
       style={{ background: "linear-gradient(#dff2fb,#b9e4f6)" }}
     >
       <span className="font-pixel text-[10px] text-[#14567e]">when she speaks up</span>
 
-      {NUDGES.map((nudge) => (
+      {NUDGES.map((nudge, index) => (
         <ToggleRow
           key={nudge.id}
+          className={`cj-row-in cj-delay-${Math.min(index + 1, 8)}`}
           name={nudge.name}
           note={nudge.note}
           checked={bool(`nudges.${nudge.id}`, DEFAULT_NUDGES[nudge.id])}
@@ -72,9 +73,10 @@ function Nudges() {
 
       <span className="mt-1 font-pixel text-[10px] text-[#14567e]">where she lives</span>
 
-      {SURFACES.map((surface) => (
+      {SURFACES.map((surface, index) => (
         <ToggleRow
           key={surface.id}
+          className={`cj-row-in cj-delay-${Math.min(index + 1, 8)}`}
           name={surface.name}
           note={surface.note}
           checked={visible[surface.id] ?? false}

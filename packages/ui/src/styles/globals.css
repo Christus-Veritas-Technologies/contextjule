@@ -360,3 +360,98 @@
     color: #221b2c;
   }
 }
+
+/* ── motion ─────────────────────────────────────────────────────────────── */
+
+/* Everything here is stepped, never eased.
+
+   She is pixel art at whole-number scale; a 60fps ease-out slides her artwork
+   across fractions of a pixel and the browser resamples it, which is the one
+   thing the whole render pipeline exists to avoid. `steps()` moves in the same
+   quantised way the sprite does, and reads as deliberate rather than cheap.
+
+   Durations are short on purpose. The test in 00-START-HERE is whether she can
+   tell you something at 2am without breaking your concentration — a screen that
+   takes half a second to arrive is a screen you wait for.
+
+   All of it sits behind `prefers-reduced-motion: no-preference`. The classes
+   exist unconditionally so markup never has to branch; they simply do nothing
+   for someone who has asked for stillness, and the final state is the resting
+   state, so nothing depends on an animation having run. */
+
+@keyframes cj-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cj-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cj-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cj-screen-in {
+    animation: cj-screen-in 180ms steps(4, end) both;
+  }
+
+  .cj-row-in {
+    animation: cj-row-in 160ms steps(4, end) both;
+  }
+
+  /* For a value that just changed under the reader. One beat, then done. */
+  .cj-pop {
+    animation: cj-pop 220ms steps(5, end);
+  }
+
+  /* The press every control shares: the plate moves onto its own shadow.
+     Two steps, because a hard-offset shadow has no in-between state. */
+  .cj-press {
+    transition:
+      transform 75ms steps(2, end),
+      background-color 75ms steps(2, end);
+  }
+
+  .cj-press:not(:disabled):hover {
+    transform: translate(-1px, -1px);
+  }
+
+  .cj-press:not(:disabled):active {
+    transform: translate(1px, 1px);
+  }
+}
+
+/* Stagger for lists. Eight is as far as anyone reads before the screen has
+   plainly arrived; past that the delay is capped by the call site rather than
+   growing until the last row lands after the user has already scrolled. */
+.cj-delay-1 { animation-delay: 24ms; }
+.cj-delay-2 { animation-delay: 48ms; }
+.cj-delay-3 { animation-delay: 72ms; }
+.cj-delay-4 { animation-delay: 96ms; }
+.cj-delay-5 { animation-delay: 120ms; }
+.cj-delay-6 { animation-delay: 144ms; }
+.cj-delay-7 { animation-delay: 168ms; }
+.cj-delay-8 { animation-delay: 192ms; }

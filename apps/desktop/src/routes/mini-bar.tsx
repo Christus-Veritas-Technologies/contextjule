@@ -33,7 +33,13 @@ function MiniBarSurface() {
         windowSize={jule.windowSize}
         activity={jule.activity}
         size={expanded ? "expanded" : "default"}
-        caption={jule.speaking ? jule.speaking.lines.join(" ") : undefined}
+        caption={
+          jule.handedOver
+            ? `${jule.clearCommand} is on your clipboard.`
+            : jule.speaking
+              ? jule.speaking.lines.join(" ")
+              : undefined
+        }
         className="shadow-none"
         style={{ width: "100vw", height: "100vh" }}
         onCleanse={() => void jule.cleanse()}

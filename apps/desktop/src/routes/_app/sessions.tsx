@@ -49,7 +49,7 @@ function Sessions() {
   const total = rows.reduce((sum, row) => sum + row.tokens, 0);
 
   return (
-    <div className="flex h-full flex-col bg-cream">
+    <div className="cj-screen-in flex h-full flex-col bg-cream">
       <div className="flex items-baseline justify-between gap-2.5 border-b-2 border-cream-rule px-4 pt-4 pb-3">
         {/* Two words rather than a dropdown: there are only ever two scopes,
             and a select here would be the one generic control on the screen. */}
@@ -59,7 +59,7 @@ function Sessions() {
               key={option}
               type="button"
               onClick={() => setScope(option)}
-              className="font-pixel text-[11px] outline-none"
+              className="cj-press font-pixel text-[11px] outline-none"
               style={{ color: scope === option ? "#231b12" : "#8a7660" }}
             >
               {option}
@@ -85,6 +85,9 @@ function Sessions() {
           rows.map((row) => (
             <SessionRow
               key={row.key}
+              // The list arrives in reading order rather than all at once.
+              // Capped at eight: past that the stagger is a wait, not a cue.
+              className={`cj-row-in cj-delay-${Math.min(row.index + 1, 8)}`}
               index={row.index}
               name={row.name}
               tokens={row.tokens}

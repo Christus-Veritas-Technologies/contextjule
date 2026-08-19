@@ -62,19 +62,20 @@ function TrayFlyout() {
               void ipc.surfaceShow("panel");
               void ipc.surfaceHide("tray-flyout");
             }}
-            className="flex h-8 flex-1 items-center justify-center border-3 border-[#12283d] bg-[#fffdf8] font-pixel text-[9px] whitespace-nowrap text-[#12283d] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px active:translate-x-px active:translate-y-px"
+            className="cj-press flex h-8 flex-1 items-center justify-center border-3 border-[#12283d] bg-[#fffdf8] font-pixel text-[9px] whitespace-nowrap text-[#12283d]"
             style={{ boxShadow: "3px 3px 0 rgba(18,40,61,0.28)" }}
           >
             open panel
           </button>
           <button
             type="button"
-            disabled={!jule.session}
             onClick={() => void jule.cleanse()}
-            className="flex h-8 flex-1 items-center justify-center border-3 border-[#12283d] bg-gold font-pixel text-[9px] text-ink-soft transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-gold-hover active:translate-x-px active:translate-y-px disabled:pointer-events-none disabled:opacity-50"
+            title={`Copies ${jule.clearCommand} to your clipboard`}
+            className="cj-press flex h-8 flex-1 items-center justify-center border-3 border-[#12283d] bg-gold font-pixel text-[9px] whitespace-nowrap text-ink-soft hover:bg-gold-hover"
             style={{ boxShadow: "3px 3px 0 rgba(18,40,61,0.28)" }}
           >
-            clear
+            {/* "clear" promised something no window can do from outside. */}
+            {jule.handedOver ? "copied" : `copy ${jule.clearCommand}`}
           </button>
         </div>
       </div>

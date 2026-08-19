@@ -53,7 +53,7 @@ export function Wardrobe() {
         </div>
       </div>
 
-      {COSMETICS.map((cosmetic) => {
+      {COSMETICS.map((cosmetic, index) => {
         const unlocked = earned.has(cosmetic.id);
         const worn = equipped[cosmetic.slot] === cosmetic.id;
         const progress = progressToward(cosmetic, stats);
@@ -66,7 +66,7 @@ export function Wardrobe() {
             onPointerEnter={() => unlocked && setPreview(cosmetic.id)}
             onPointerLeave={() => setPreview(null)}
             onClick={() => void equip(cosmetic.slot as CosmeticSlot, worn ? null : cosmetic.id)}
-            className="flex flex-col gap-2 border-2 border-ink bg-dusk px-[13px] py-[11px] text-left outline-none disabled:cursor-default"
+            className={`cj-row-in cj-press cj-delay-${Math.min(index + 3, 8)} flex flex-col gap-2 border-2 border-ink bg-dusk px-[13px] py-[11px] text-left outline-none disabled:cursor-default`}
             style={{ opacity: unlocked ? 1 : 0.62 }}
           >
             <div className="flex items-center justify-between gap-3">

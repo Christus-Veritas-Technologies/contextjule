@@ -4,6 +4,53 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 14 — the first installer, an honest button, and some motion
+
+**The release pipeline ran.** `ContextJule-Setup.exe`, `ContextJule.dmg`,
+`ContextJule.app.tar.gz`, both signatures and `latest.json` are in R2. Four
+sessions of open item 1 closed.
+
+**"Help her carry this" was disabled, not broken.** Every surface gated it on
+`!jule.session`, and until session 13 nothing ever created a session — so on a
+machine with the status line uninstalled it was permanently greyed out, which
+reads as a dead button rather than a waiting one. Worse, the four surfaces did
+different things: only the home screen copied `/clear`; the panel, the tray and
+the mini bar played the dump animation and recorded a cleanse, and the panel's
+label said *clear context* while the tray's said *clear*, neither of which any
+window can do from outside the tool.
+
+The hand-off moved into `jule.cleanse()`, so there is one behaviour: copy the
+command, confirm it, record the cleanse if there is a session to record it
+against. Not gated on a session any more — the clipboard is just as useful
+before she has found anything to watch, and that is exactly when a disabled
+control looks broken. `handedOver` on the controller holds the confirmation for
+four seconds so every surface can say the same thing without four copies of the
+same `setTimeout`.
+
+**Divergence from the design sheets:** panel `clear context` ‒ `copy /clear`,
+tray `clear` ‒ `copy /clear`. Both sheets were drawn before it was settled that
+clearing someone else's context is not reachable. Home and mini bar keep *help
+her carry this*, which promises nothing it cannot do.
+
+**Motion, stepped rather than eased.** `cj-screen-in` on the four tab screens,
+`cj-row-in` with a capped stagger on sessions, nudges, stat tiles and the
+wardrobe, `cj-press` as the one press every control shares, and a single
+`cj-pop` on the home caption when the clipboard hand-off lands. All `steps()`:
+she is pixel art at whole-number scale, and a 60fps ease-out slides artwork
+across fractions of a pixel, which is the one thing the render pipeline exists
+to avoid. All of it behind `prefers-reduced-motion: no-preference`, with the
+resting state as the final frame, so nothing depends on an animation running.
+
+**Favicon.** RealFaviconGenerator's files sit in `apps/web/src/app` and
+`public/`. No `<link>` tags: `favicon.ico`, `icon0.svg`, `icon1.png`,
+`apple-icon.png` and `manifest.json` are App Router file conventions and Next
+emits the markup itself. The one tag the convention cannot express —
+`apple-mobile-web-app-title` — is `appleWebApp: { title }` in the metadata.
+`capable` is left unset on purpose; it strips Safari's chrome from a saved page,
+and this is a marketing site, not an app shell.
+
+---
+
 ## Session 13 — she was never reading anything
 
 **The transcript readers had never been run.** `sources/mod.rs` said so in a

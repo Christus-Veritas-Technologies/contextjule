@@ -77,17 +77,20 @@ function Panel() {
         <div className="mt-[5px] flex gap-2">
           <button
             type="button"
-            disabled={!jule.session}
             onClick={() => void jule.cleanse()}
-            className="flex h-[38px] flex-1 items-center justify-center border-3 border-ink-soft bg-gold font-pixel text-[10px] whitespace-nowrap text-ink-soft shadow-hard transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-gold-hover active:translate-x-px active:translate-y-px disabled:pointer-events-none disabled:opacity-50"
+            title={`Copies ${jule.clearCommand} to your clipboard`}
+            className="cj-press flex h-[38px] flex-1 items-center justify-center border-3 border-ink-soft bg-gold font-pixel text-[10px] whitespace-nowrap text-ink-soft shadow-hard hover:bg-gold-hover"
           >
-            clear context
+            {/* Not "clear context": this window cannot clear anyone's context,
+                and the design sheet's label was written before that was settled.
+                It hands over the command; the label now says so. */}
+            {jule.handedOver ? "copied. paste it." : `copy ${jule.clearCommand}`}
           </button>
           <button
             type="button"
             aria-label="Open the full window"
             onClick={() => void ipc.surfaceShow("main")}
-            className="flex size-[38px] items-center justify-center border-3 border-ink-soft bg-[#fffdf8] font-pixel text-[11px] text-ink-soft shadow-hard-soft transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-[#f6ead6] active:translate-x-px active:translate-y-px"
+            className="cj-press flex size-[38px] items-center justify-center border-3 border-ink-soft bg-[#fffdf8] font-pixel text-[11px] text-ink-soft shadow-hard-soft hover:bg-[#f6ead6]"
           >
             +
           </button>
