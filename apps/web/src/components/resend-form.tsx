@@ -4,6 +4,7 @@ import { Button } from "@contextjule/ui/components/button";
 import { Input } from "@contextjule/ui/components/input";
 import { useState } from "react";
 
+import { trackResendRequested } from "@/lib/analytics";
 import { resendDownload } from "@/lib/api";
 
 /**
@@ -42,6 +43,7 @@ export function ResendForm() {
         if (!email.trim()) return;
         setPending(true);
         await resendDownload(email.trim());
+        trackResendRequested();
         setPending(false);
         setSent(true);
       }}

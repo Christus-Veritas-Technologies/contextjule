@@ -18,9 +18,23 @@ export const env = createEnv({
   client: {
     /** Origin of the API. Everything else the site needs comes from it. */
     NEXT_PUBLIC_SERVER_URL: z.url(),
+
+    /**
+     * Google Analytics measurement id, `G-…`.
+     *
+     * Optional, and that is the point: unset, no tag is rendered at all. Local
+     * development and preview builds would otherwise pollute the same property
+     * the real numbers live in, and "why did conversion drop" is hard enough
+     * without your own clicking in the data.
+     */
+    NEXT_PUBLIC_GA_ID: z
+      .string()
+      .regex(/^G-[A-Z0-9]+$/, "Should look like G-XXXXXXXXXX")
+      .optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
+    NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
   },
   emptyStringAsUndefined: true,
 });

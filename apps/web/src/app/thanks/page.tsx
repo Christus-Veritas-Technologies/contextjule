@@ -36,6 +36,7 @@ export default async function Thanks({
           sessionId={sessionId}
           licenseKey={first(params.license_key)}
           status={first(params.status)}
+          paymentId={first(params.payment_id)}
           email={first(params.email)}
         />
       </div>

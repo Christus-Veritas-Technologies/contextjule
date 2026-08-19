@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { trackPurchase } from "@/lib/analytics";
 import { type CheckoutStatus, fetchCheckoutStatus } from "@/lib/api";
-import { recallCheckout } from "@/lib/session";
+import { claimPurchaseReport, recallCheckout } from "@/lib/session";
 
 /**
  * The checkout return page.
@@ -33,11 +34,13 @@ export function ThanksPanel({
   licenseKey: keyFromUrl,
   status: statusFromUrl,
   email: emailFromUrl,
+  paymentId,
 }: {
   sessionId?: string;
   licenseKey?: string;
   status?: string;
   email?: string;
+  paymentId?: string;
 }) {
   const [status, setStatus] = useState<CheckoutStatus | null>(null);
   // Seeded from the URL, so the first paint already has it when Dodo sent it.
@@ -96,6 +99,25 @@ export function ThanksPanel({
       cancelled = true;
     };
   }, [sessionId, keyFromUrl, declaredFail]);
+
+  /**
+   * Report the sale, once, the moment the key is in hand.
+   *
+   * Fired here rather than on the redirect because this is where we actually
+   * know it succeeded — Dodo bounces back on `processing` too, and counting
+   * those would inflate revenue with purchases that never cleared.
+   */
+  useEffect(() => {
+    if (!key) return;
+    const transactionId = paymentId ?? sessionId ?? key;
+    if (!claimPurchaseReport(transactionId)) return;
+    trackPurchase({
+      transactionId,
+      valueMinor: status?.amountMinor ?? (statusFromUrl ? null : 0),
+      currency: status?.currency,
+      free: (status?.amountMinor ?? 0) === 0,
+    });
+  }, [key, paymentId, sessionId, status, statusFromUrl]);
 
   // Only ever call it a failure on evidence: Dodo said so, or we asked and were
   // told the payment did not succeed. Never merely because we are still waiting.

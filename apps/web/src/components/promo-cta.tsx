@@ -5,9 +5,14 @@ import { ctaLabel, type PromoState, urgencyLine } from "@contextjule/core/promo"
 import { Button } from "@contextjule/ui/components/button";
 import { cn } from "@contextjule/ui/lib/utils";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  trackBeginCheckout,
+  trackCheckoutBlocked,
+  trackPromoView,
+} from "@/lib/analytics";
 import { ApiError, startCheckout } from "@/lib/api";
 import { rememberCheckout } from "@/lib/session";
 import { useLivePhase, usePromo } from "@/lib/use-promo";
@@ -51,8 +56,23 @@ export function PromoCta({
   const centred = align === "center";
   const urgency = urgencyLine(promo);
 
+  /**
+   * Report the phase this visitor was actually shown, once.
+   *
+   * Only from the instance that owns the `buy` anchor — the CTA renders twice
+   * on the landing page, and firing from both would double every phase count
+   * and make the conversion rate read as half what it is.
+   */
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!anchorId || reported.current) return;
+    reported.current = true;
+    trackPromoView(promo);
+  }, [anchorId, promo]);
+
   async function buy() {
     setPending(true);
+    trackBeginCheckout(promo);
     try {
       const { checkoutUrl, sessionId } = await startCheckout({ expectedOffer: promo.offer });
       // Written before the redirect, so the thanks page can ask about this
@@ -61,6 +81,7 @@ export function PromoCta({
       rememberCheckout(sessionId);
       window.location.href = checkoutUrl;
     } catch (error) {
+      trackCheckoutBlocked(error instanceof ApiError ? error.code : "unknown");
       if (error instanceof ApiError && error.code === "offer_moved") {
         toast.message(error.message, {
           action: { label: "refresh", onClick: () => window.location.reload() },

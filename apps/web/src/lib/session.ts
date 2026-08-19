@@ -28,3 +28,28 @@ export function recallCheckout(): string | null {
     return null;
   }
 }
+
+/**
+ * Has this purchase already been reported to analytics?
+ *
+ * Returns true the first time it is asked about a given id, false forever
+ * after. The thanks page is a plain URL a buyer can refresh, bookmark or open
+ * in a second tab, and GA4 does de-duplicate `purchase` by `transaction_id` —
+ * but only within a window, and only if the id is actually set. This is the
+ * cheap belt to that braces.
+ *
+ * localStorage rather than sessionStorage: a new tab is exactly the case this
+ * has to survive, and a sessionStorage guard is scoped to the tab that misses
+ * it.
+ */
+export function claimPurchaseReport(transactionId: string): boolean {
+  const key = `contextjule:reported:${transactionId}`;
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+    return true;
+  } catch {
+    // Storage disabled. Reporting once per page view beats never reporting.
+    return true;
+  }
+}

@@ -1,4 +1,5 @@
 import { Toaster } from "@contextjule/ui/components/sonner";
+import { Analytics } from "@/components/analytics";
 import type { Metadata, Viewport } from "next";
 
 import "../index.css";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-svh overflow-x-hidden antialiased">
         {children}
         <Toaster position="bottom-right" />
+        <Analytics />
       </body>
     </html>
   );

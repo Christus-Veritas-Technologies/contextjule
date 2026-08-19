@@ -55,6 +55,15 @@ COPY apps/web/package.json apps/web/
 # needed to change what the page charges.
 ARG NEXT_PUBLIC_SERVER_URL=http://localhost:3000
 ENV NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL}
+
+# Google Analytics. Same rule: read at build time and baked into the client
+# bundle, never read at runtime. Deliberately has no default — unset means no
+# tag is rendered, so an image built without it cannot quietly report a preview
+# deployment's traffic into the production property.
+# Override via: --build-arg NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
+ARG NEXT_PUBLIC_GA_ID
+ENV NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # `--filter web...` installs the site and everything it depends on, and nothing else. It is not
