@@ -50,8 +50,13 @@ jobs:
           workspaces: apps/desktop/src-tauri
           key: ${{ matrix.platform }}
 
+      # packages/db has a `postinstall: prisma generate`, and prisma.config.ts
+      # reads DATABASE_URL through prisma/config's `env()` helper, which throws
+      # if the variable is missing entirely — so even the install needs it set.
       - name: Install deps
         run: pnpm install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
 
       # The desktop app imports @contextjule/core and @contextjule/ui, which are
       # plain TypeScript sources — nothing needs the database. Generating the

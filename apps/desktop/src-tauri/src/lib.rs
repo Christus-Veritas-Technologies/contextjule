@@ -15,7 +15,6 @@ mod tray;
 mod windows;
 
 use serde::Serialize;
-use std::sync::mpsc;
 use store::{Session, SessionUpsert, Stats, Store};
 
 use sources::{SourceRunner, SourceStatus};
