@@ -47,16 +47,43 @@ fn api_base() -> String {
 
 /// Dodo's public endpoints, used only when our own API cannot be reached.
 ///
-/// Live by default for the same reason as above. While the product is still in
-/// Dodo's test mode, build with:
-///   `CONTEXTJULE_DODO_URL=https://test.dodopayments.com`
-/// otherwise the fallback path validates test keys against the live service and
-/// reports every one of them as invalid.
-fn dodo_base() -> String {
-    option_env!("CONTEXTJULE_DODO_URL")
-        .unwrap_or("https://live.dodopayments.com")
-        .trim_end_matches('/')
-        .to_string()
+/// Resolved in three steps — a `CONTEXTJULE_DODO_URL` baked in at build time,
+/// then whatever our API last told us its environment was, then live.
+///
+/// The middle step is the one that matters. This used to be live-or-override,
+/// and a test-mode key checked against live comes back invalid — on a copy the
+/// customer paid for, at the exact moment our API is down and cannot explain
+/// itself. Our API reports its own `DODO_ENVIRONMENT` on every licence
+/// response, so the app learns the right answer while things are working and
+/// still has it when they are not.
+/// Settings key holding the Dodo base our API last reported.
+const DODO_BASE_SETTING: &str = "dodo_public_base";
+
+fn dodo_base(store: &Store) -> String {
+    // A build-time override is an explicit decision and outranks everything.
+    if let Some(baked) = option_env!("CONTEXTJULE_DODO_URL") {
+        return baked.trim_end_matches('/').to_string();
+    }
+    // Otherwise use what our API told us the last time it answered. It knows its
+    // own DODO_ENVIRONMENT, so this is the only source that cannot be wrong.
+    if let Some(learned) = crate::store::settings_get(store, DODO_BASE_SETTING).ok().flatten() {
+        if learned.starts_with("https://") {
+            return learned.trim_end_matches('/').to_string();
+        }
+    }
+    // Never contacted our API and no override: live is the honest guess, since
+    // that is what a shipped copy is selling against.
+    "https://live.dodopayments.com".to_string()
+}
+
+/// Record which Dodo our API is talking to, so the offline fallback matches.
+fn remember_dodo_base(store: &Store, base: Option<&str>) {
+    if let Some(value) = base {
+        if value.starts_with("https://") {
+            let _ =
+                crate::store::settings_set(store, DODO_BASE_SETTING, value.trim_end_matches('/'));
+        }
+    }
 }
 
 /// Seven days. Long enough to survive a flight and bad hotel wifi, short enough
@@ -202,7 +229,11 @@ pub async fn activate(
     machine_id: &str,
     platform: &str,
 ) -> Result<LicenseState> {
-    let key = license_key.trim().to_uppercase();
+    // Trim only. Dodo issues lowercase UUID keys and looks them up
+    // case-sensitively, so uppercasing here — as this did — turned a real key
+    // into a 404 and told the buyer their key was not recognised. Mirrors
+    // `licenseKeySchema` in @contextjule/core; keep the two in step.
+    let key = license_key.trim().to_string();
     let body = ActivateBody {
         license_key: &key,
         device_name,
@@ -211,16 +242,14 @@ pub async fn activate(
         app_version: env!("CARGO_PKG_VERSION"),
     };
 
-    let via_api = client()
-        .post(format!("{}/api/licenses/activate", api_base()))
-        .json(&body)
-        .send()
-        .await;
+    let via_api =
+        client().post(format!("{}/api/licenses/activate", api_base())).json(&body).send().await;
 
     let state = match via_api {
         Ok(response) if response.status().is_success() => {
             let parsed: ApiActivateResponse =
                 response.json().await.map_err(|e| LicenseError::Network(e.to_string()))?;
+            remember_dodo_base(store, parsed.dodo_public_base.as_deref());
             LicenseState {
                 status: "active".into(),
                 license_key: Some(key.clone()),
@@ -236,7 +265,7 @@ pub async fn activate(
             // Our API forwards Dodo's status, so the reason survives the hop.
             return Err(LicenseError::Rejected(reason_for(response.status().as_u16())));
         }
-        Err(_) => activate_via_dodo(&key, device_name).await?,
+        Err(_) => activate_via_dodo(store, &key, device_name).await?,
     };
 
     save(store, &state)?;
@@ -247,6 +276,8 @@ pub async fn activate(
 #[serde(rename_all = "camelCase")]
 struct ApiActivateResponse {
     license_key_instance_id: String,
+    #[serde(default)]
+    dodo_public_base: Option<String>,
     #[serde(default)]
     email: Option<String>,
     #[serde(default)]
@@ -271,9 +302,9 @@ struct DodoCustomer {
     email: Option<String>,
 }
 
-async fn activate_via_dodo(key: &str, device_name: &str) -> Result<LicenseState> {
+async fn activate_via_dodo(store: &Store, key: &str, device_name: &str) -> Result<LicenseState> {
     let response = client()
-        .post(format!("{}/licenses/activate", dodo_base()))
+        .post(format!("{}/licenses/activate", dodo_base(store)))
         .json(&serde_json::json!({ "license_key": key, "name": device_name }))
         .send()
         .await
@@ -316,6 +347,8 @@ fn reason_for(status: u16) -> String {
 struct ApiValidateResponse {
     valid: bool,
     #[serde(default)]
+    dodo_public_base: Option<String>,
+    #[serde(default)]
     status: Option<String>,
     #[serde(default)]
     email: Option<String>,
@@ -348,14 +381,10 @@ pub async fn validate(store: &Store) -> Result<LicenseState> {
         "licenseKeyInstanceId": state.license_key_instance_id,
     });
 
-    match client()
-        .post(format!("{}/api/licenses/validate", api_base()))
-        .json(&body)
-        .send()
-        .await
-    {
+    match client().post(format!("{}/api/licenses/validate", api_base())).json(&body).send().await {
         Ok(response) if response.status().is_success() => {
             if let Ok(parsed) = response.json::<ApiValidateResponse>().await {
+                remember_dodo_base(store, parsed.dodo_public_base.as_deref());
                 state.status = if parsed.valid {
                     "active".into()
                 } else {
@@ -377,7 +406,7 @@ pub async fn validate(store: &Store) -> Result<LicenseState> {
 
     // Our API is down or answered badly. Ask Dodo, which is the authority.
     let dodo = client()
-        .post(format!("{}/licenses/validate", dodo_base()))
+        .post(format!("{}/licenses/validate", dodo_base(store)))
         .json(&serde_json::json!({
             "license_key": key,
             "license_key_instance_id": state.license_key_instance_id,

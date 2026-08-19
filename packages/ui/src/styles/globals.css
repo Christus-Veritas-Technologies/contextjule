@@ -187,6 +187,12 @@
   --font-sans: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
   --font-pixel: "Silkscreen", ui-monospace, monospace;
   --font-mono: "Silkscreen", ui-monospace, monospace;
+  /* Verbatim machine text — licence keys, ids, anything the reader has to
+     retype. Silkscreen has no lowercase glyphs, so a lowercase UUID shown in it
+     reads as uppercase; a buyer who types back what they saw gets rejected by a
+     case-sensitive lookup. This is the one place the pixel voice has to give
+     way to a font that tells the truth about its characters. */
+  --font-code: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

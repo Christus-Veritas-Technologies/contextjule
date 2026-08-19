@@ -30,13 +30,25 @@ export const OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1_000;
 /** Re-validate in the background at most this often. */
 export const REVALIDATE_EVERY_MS = 24 * 60 * 60 * 1_000;
 
-/** Dodo license keys look like `PRO-AAAA-BBBB-CCCC-DDDD`. */
+/**
+ * A license key, exactly as Dodo issued it.
+ *
+ * This schema used to uppercase the value. That was written against the
+ * `PRO-AAAA-BBBB-CCCC-DDDD` shape Dodo's docs show for formatted keys — but the
+ * keys actually issued are lowercase UUIDs (`fc62d7ac-715d-4c69-…`), and Dodo
+ * looks them up case-sensitively. Uppercasing turned every real key into one
+ * Dodo had never heard of: a 404 on activate, shown to the buyer as "that key
+ * was not recognised", seconds after they paid. It also missed our own
+ * `LicenseKey` row, which the webhook stores verbatim.
+ *
+ * The key is an opaque token. The only safe transform is none — trim the
+ * whitespace a paste picks up and leave the rest alone.
+ */
 export const licenseKeySchema = z
   .string()
   .trim()
   .min(8, "That key looks too short.")
-  .max(128)
-  .transform((value) => value.toUpperCase());
+  .max(128);
 
 export const activateRequestSchema = z.object({
   licenseKey: licenseKeySchema,

@@ -75,15 +75,47 @@ function upstreamStatus(error: unknown): number | null {
   return null;
 }
 
+/**
+ * Find a stored key, forgiving case, and answer with the canonical spelling.
+ *
+ * Dodo issues lowercase UUID keys and matches them case-sensitively. The thanks
+ * page renders the key in Silkscreen, a font with no lowercase glyphs, so a
+ * buyer reading it off the screen types it back in uppercase — and Dodo has
+ * never heard of `FC62D7AC-…`. Our own row holds the key exactly as the webhook
+ * delivered it, so an insensitive match recovers the real spelling and
+ * everything downstream talks to Dodo in Dodo's own case.
+ *
+ * The exact match runs first because it is the indexed unique lookup and it is
+ * what almost every request hits; the insensitive scan is the recovery path.
+ *
+ * A key we have no row for cannot be repaired this way — nothing here knows its
+ * true case — so it goes to Dodo as typed. That is only the window between the
+ * payment and its webhook, and the copy button on the thanks page puts the
+ * right case on the clipboard anyway.
+ */
+async function findStoredKey(licenseKey: string) {
+  // The include is written out twice rather than hoisted to a shared const:
+  // Prisma infers the shape of the row from the literal `true`s, and a hoisted
+  // object widens them to `boolean`, which loses `customer` off the result type.
+  const exact = await prisma.licenseKey.findUnique({
+    where: { key: licenseKey },
+    include: { customer: true, activations: { where: { deactivatedAt: null } } },
+  });
+  if (exact) return exact;
+  return prisma.licenseKey.findFirst({
+    where: { key: { equals: licenseKey, mode: "insensitive" } },
+    include: { customer: true, activations: { where: { deactivatedAt: null } } },
+  });
+}
+
 licenseRoutes.post("/activate", async (c) => {
   const parsed = activateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest("invalid_body", "That key does not look right.");
-  const { licenseKey, deviceName, machineId, platform, appVersion } = parsed.data;
+  const { deviceName, machineId, platform, appVersion } = parsed.data;
 
-  const stored = await prisma.licenseKey.findUnique({
-    where: { key: licenseKey },
-    include: { activations: { where: { deactivatedAt: null } }, customer: true },
-  });
+  const stored = await findStoredKey(parsed.data.licenseKey);
+  // Dodo's spelling wins wherever we have it; the typed one only when we do not.
+  const licenseKey = stored?.key ?? parsed.data.licenseKey;
 
   // A machine that has activated before reuses its slot rather than burning a
   // new one. Reinstalls and OS upgrades should not cost the customer anything.
@@ -161,18 +193,17 @@ licenseRoutes.post("/activate", async (c) => {
     activationsUsed: null,
     activationsLimit: null,
     expiresAt: null,
+    dodoPublicBase: DODO_PUBLIC_BASE,
   });
 });
 
 licenseRoutes.post("/validate", async (c) => {
   const parsed = validateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest("invalid_body", "That key does not look right.");
-  const { licenseKey, licenseKeyInstanceId } = parsed.data;
+  const { licenseKeyInstanceId } = parsed.data;
 
-  const stored = await prisma.licenseKey.findUnique({
-    where: { key: licenseKey },
-    include: { customer: true, activations: { where: { deactivatedAt: null } } },
-  });
+  const stored = await findStoredKey(parsed.data.licenseKey);
+  const licenseKey = stored?.key ?? parsed.data.licenseKey;
 
   let valid = false;
   try {
@@ -217,9 +248,11 @@ licenseRoutes.post("/deactivate", async (c) => {
   const parsed = deactivateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest("invalid_body", "Missing the activation to release.");
 
+  const canonical = (await findStoredKey(parsed.data.licenseKey))?.key ?? parsed.data.licenseKey;
+
   try {
     await dodo.licenses.deactivate({
-      license_key: parsed.data.licenseKey,
+      license_key: canonical,
       license_key_instance_id: parsed.data.licenseKeyInstanceId,
     });
   } catch (error) {
@@ -246,8 +279,10 @@ licenseRoutes.post("/deactivate", async (c) => {
 
 /** The machines a key is running on, so a customer can free one up. */
 licenseRoutes.get("/:key/activations", async (c) => {
-  const stored = await prisma.licenseKey.findUnique({
-    where: { key: c.req.param("key").toUpperCase() },
+  const stored = await prisma.licenseKey.findFirst({
+    // Case-insensitive for the same reason as `findStoredKey` — this one is
+    // read-only and never talks to Dodo, so it can match loosely outright.
+    where: { key: { equals: c.req.param("key").trim(), mode: "insensitive" } },
     include: { activations: { where: { deactivatedAt: null }, orderBy: { lastSeenAt: "desc" } } },
   });
   if (!stored) return c.json({ activations: [] });
@@ -277,7 +312,7 @@ function describe(
   stored: StoredKey,
   instanceId: string | null,
   status: LicenseStatus,
-): LicenseState & { valid: boolean } {
+): LicenseState & { valid: boolean; dodoPublicBase: string } {
   return {
     valid: status === "active",
     status,
@@ -290,5 +325,10 @@ function describe(
     // Not part of LicenseState, but the app shows "licensed to …" and this is
     // the only place that fact exists.
     ...(stored?.customer?.email ? { email: stored.customer.email } : { email: null }),
-  } as LicenseState & { valid: boolean; email: string | null };
+    // Which Dodo the key was issued by. The desktop app caches this so its
+    // offline fallback — which calls Dodo directly when this API is unreachable
+    // — asks the same environment the key exists in. Without it a test-mode key
+    // is checked against live and comes back invalid on a copy that was paid for.
+    dodoPublicBase: DODO_PUBLIC_BASE,
+  } as LicenseState & { valid: boolean; email: string | null; dodoPublicBase: string };
 }

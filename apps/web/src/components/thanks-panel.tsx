@@ -154,7 +154,9 @@ export function ThanksPanel({
                     .then(() => toast.success("key copied"))
                     .catch(() => toast.error("could not copy — select it and copy by hand"));
                 }}
-                className="border-3 border-ink-soft bg-gold px-4 py-3.5 text-left font-pixel text-[12px] tracking-[0.1em] break-all text-ink-soft transition-colors hover:bg-gold-hover md:text-[13px]"
+                // font-code, not font-pixel: Silkscreen would render this lowercase UUID
+                // in uppercase glyphs and anyone retyping it would be rejected.
+                className="border-3 border-ink-soft bg-gold px-4 py-3.5 text-left font-code text-[13px] font-semibold tracking-[0.06em] break-all text-ink-soft transition-colors hover:bg-gold-hover md:text-[14px]"
               >
                 {key}
               </button>
