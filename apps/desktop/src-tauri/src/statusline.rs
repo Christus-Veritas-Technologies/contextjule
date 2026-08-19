@@ -42,7 +42,9 @@ fn read_settings(path: &PathBuf) -> Value {
 
 /// Is our command currently the configured status line?
 pub fn is_installed() -> bool {
-    let Some(path) = settings_path() else { return false };
+    let Some(path) = settings_path() else {
+        return false;
+    };
     let settings = read_settings(&path);
     settings
         .get("statusLine")
@@ -64,7 +66,9 @@ pub fn install() -> Result<(), String> {
 
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut settings = read_settings(&path);
-    let object = settings.as_object_mut().ok_or("settings.json is not an object")?;
+    let object = settings
+        .as_object_mut()
+        .ok_or("settings.json is not an object")?;
 
     let existing = object
         .get("statusLine")
@@ -97,7 +101,10 @@ pub fn uninstall() -> Result<(), String> {
         return Ok(());
     };
 
-    match object.remove(PREVIOUS_KEY).and_then(|v| v.as_str().map(str::to_string)) {
+    match object
+        .remove(PREVIOUS_KEY)
+        .and_then(|v| v.as_str().map(str::to_string))
+    {
         Some(previous) => {
             object.insert(
                 "statusLine".into(),
@@ -194,7 +201,10 @@ pub struct StatusReading {
 }
 
 fn extract(payload: &Value) -> Option<StatusReading> {
-    let session_id = payload.get("session_id").and_then(Value::as_str)?.to_string();
+    let session_id = payload
+        .get("session_id")
+        .and_then(Value::as_str)?
+        .to_string();
     let context = payload.get("context_window")?;
 
     // Null before the first API call, and again after /compact until the next
@@ -229,7 +239,13 @@ fn extract(payload: &Value) -> Option<StatusReading> {
         .and_then(Value::as_str)
         .map(str::to_string);
 
-    Some(StatusReading { session_id, title, model, tokens, window_size })
+    Some(StatusReading {
+        session_id,
+        title,
+        model,
+        tokens,
+        window_size,
+    })
 }
 
 /// Write straight into the same SQLite file the app reads.
@@ -240,7 +256,9 @@ fn record(reading: &StatusReading) {
     let Some(path) = app_data_dir().map(|dir| dir.join("contextjule.db")) else {
         return;
     };
-    let Ok(store) = Store::open(&path) else { return };
+    let Ok(store) = Store::open(&path) else {
+        return;
+    };
 
     let _ = store::session_upsert(
         &store,
@@ -279,7 +297,7 @@ fn render(reading: Option<&StatusReading>, payload: &Value) -> String {
 
     const CELLS: usize = 14;
     let filled = if reading.tokens > 0 {
-        ((used * CELLS as f64).round() as usize).max(1).min(CELLS)
+        ((used * CELLS as f64).round() as usize).clamp(1, CELLS)
     } else {
         0
     };

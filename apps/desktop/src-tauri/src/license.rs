@@ -101,7 +101,10 @@ pub struct LicenseState {
 
 impl LicenseState {
     fn unlicensed() -> Self {
-        Self { status: "unlicensed".into(), ..Default::default() }
+        Self {
+            status: "unlicensed".into(),
+            ..Default::default()
+        }
     }
 }
 
@@ -149,7 +152,10 @@ fn save(store: &Store, state: &LicenseState) -> Result<()> {
             state.activations_used,
             state.activations_limit,
             state.expires_at.as_deref().and_then(rfc3339_to_millis),
-            state.last_validated_at.as_deref().and_then(rfc3339_to_millis),
+            state
+                .last_validated_at
+                .as_deref()
+                .and_then(rfc3339_to_millis),
         ],
     )
     .map_err(StoreError::from)?;
@@ -219,8 +225,10 @@ pub async fn activate(
 
     let state = match via_api {
         Ok(response) if response.status().is_success() => {
-            let parsed: ApiActivateResponse =
-                response.json().await.map_err(|e| LicenseError::Network(e.to_string()))?;
+            let parsed: ApiActivateResponse = response
+                .json()
+                .await
+                .map_err(|e| LicenseError::Network(e.to_string()))?;
             LicenseState {
                 status: "active".into(),
                 license_key: Some(key.clone()),
@@ -234,7 +242,9 @@ pub async fn activate(
         }
         Ok(response) => {
             // Our API forwards Dodo's status, so the reason survives the hop.
-            return Err(LicenseError::Rejected(reason_for(response.status().as_u16())));
+            return Err(LicenseError::Rejected(reason_for(
+                response.status().as_u16(),
+            )));
         }
         Err(_) => activate_via_dodo(&key, device_name).await?,
     };
@@ -280,11 +290,15 @@ async fn activate_via_dodo(key: &str, device_name: &str) -> Result<LicenseState>
         .map_err(|e| LicenseError::Network(e.to_string()))?;
 
     if !response.status().is_success() {
-        return Err(LicenseError::Rejected(reason_for(response.status().as_u16())));
+        return Err(LicenseError::Rejected(reason_for(
+            response.status().as_u16(),
+        )));
     }
 
-    let parsed: DodoActivateResponse =
-        response.json().await.map_err(|e| LicenseError::Network(e.to_string()))?;
+    let parsed: DodoActivateResponse = response
+        .json()
+        .await
+        .map_err(|e| LicenseError::Network(e.to_string()))?;
 
     // Dodo's activate response carries no activation counts or expiry — only
     // the instance and the customer. That is all we can know on this path.
@@ -388,7 +402,11 @@ pub async fn validate(store: &Store) -> Result<LicenseState> {
     if let Ok(response) = dodo {
         if response.status().is_success() {
             if let Ok(parsed) = response.json::<DodoValidateResponse>().await {
-                state.status = if parsed.valid { "active".into() } else { "invalid".into() };
+                state.status = if parsed.valid {
+                    "active".into()
+                } else {
+                    "invalid".into()
+                };
                 if parsed.valid {
                     state.last_validated_at = Some(now_rfc3339());
                 }
@@ -399,13 +417,21 @@ pub async fn validate(store: &Store) -> Result<LicenseState> {
     }
 
     // Nothing answered. Fall back to the cache and let the grace window decide.
-    state.status = if within_grace(&state) { "offline_grace".into() } else { "expired".into() };
+    state.status = if within_grace(&state) {
+        "offline_grace".into()
+    } else {
+        "expired".into()
+    };
     save(store, &state)?;
     Ok(state)
 }
 
 fn within_grace(state: &LicenseState) -> bool {
-    let Some(last) = state.last_validated_at.as_deref().and_then(rfc3339_to_millis) else {
+    let Some(last) = state
+        .last_validated_at
+        .as_deref()
+        .and_then(rfc3339_to_millis)
+    else {
         return false;
     };
     now_millis() - last < OFFLINE_GRACE_MS
@@ -438,7 +464,9 @@ pub fn now_millis() -> i64 {
 }
 
 fn now_rfc3339() -> String {
-    OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_default()
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_default()
 }
 
 fn millis_to_rfc3339(millis: i64) -> Option<String> {

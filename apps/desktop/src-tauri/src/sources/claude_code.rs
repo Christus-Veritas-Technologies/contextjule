@@ -169,8 +169,9 @@ fn apply(state: &mut Reading, entry: &Value) -> bool {
     };
 
     let field = |name: &str| usage.get(name).and_then(Value::as_i64).unwrap_or(0);
-    let tokens =
-        field("input_tokens") + field("cache_creation_input_tokens") + field("cache_read_input_tokens");
+    let tokens = field("input_tokens")
+        + field("cache_creation_input_tokens")
+        + field("cache_read_input_tokens");
 
     // Zero means the entry had no usable usage block, not an empty window.
     if tokens <= 0 {
