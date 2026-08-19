@@ -4,6 +4,67 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 11 — the release workflow was never a valid file
+
+**`if: ${{ secrets.R2_ACCOUNT_ID != '' }}` is not a failing step, it is a
+rejected file.** GitHub does not expose the `secrets` context to a step-level
+`if`, so the parser stops at line 167 with *Unrecognized named-value:
+'secrets'* and refuses to run **any** job in the workflow — Windows and macOS
+builds included. Session 4 found this exact line and it came back; the tell is
+an `Invalid workflow file` annotation with no job logs underneath, which reads
+nothing like a build failure and is easy to skim past.
+
+Fixed by hoisting the secret to job-level `env` and testing
+`if: env.R2_ACCOUNT_ID != ''`. `env` *is* in the context list for a step `if`.
+The workflow now passes `actionlint` clean.
+
+**`pnpm db:generate` failed for the same reason `pnpm install` did, one layer
+further in.** Turbo runs tasks in a sanitised environment, so the
+`DATABASE_URL` set on the workflow step never reached `prisma generate`.
+Nothing extra was needed in the end: the `prisma.config.ts` change already
+sitting unmerged on local `main` scopes the requirement to the commands that
+actually open a connection and hands `generate` a deliberately unusable
+placeholder. Merging main is the fix; the workflow env var is now belt and
+braces.
+
+**`ci.yml` deleted.** Nothing else runs `cargo fmt --check` or
+`clippy -D warnings` now, so neither will tell you when it drifts. Run them by
+hand before a release or accept that the first thing to notice will be a
+forty-minute Tauri build.
+
+---
+
+## Session 10 — the first CI run on main, and what it found
+
+**`pnpm install --frozen-lockfile` had never been run without a `.env` beside
+it.** `packages/db` carries `postinstall: prisma generate`, and
+`prisma.config.ts` reads `DATABASE_URL` through `prisma/config`'s `env()`
+helper, which throws outright when the variable is unset — it does not fall
+back to undefined. So the install step died before a single check ran, with
+`PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`.
+
+The Dockerfile already had this exact trap written down and solved (a dummy
+`ARG DATABASE_URL` before `pnpm install`). CI never got the same treatment
+because the `Generate Prisma client` step — which does set it — looks like it
+is the first thing that needs it. It is not: the postinstall runs one step
+earlier. Fixed in both workflows, not just `ci.yml`; `release-desktop.yml`
+installs the same way and would have failed identically on its first run.
+
+**`use std::sync::mpsc` in `lib.rs` was a leftover** from before the status
+line moved to `sources/mod.rs` — `sources/mod.rs` even says so in a comment.
+Locally it is a warning; `clippy -D warnings` makes it an error. This is the
+third time a CI round trip has been spent on something `cargo clippy` would
+have printed in fifteen seconds.
+
+**Free claims per IP raised from 1 to 5 per day.** One is not a limit, it is a
+single-shot; a household, an office or anyone behind CGNAT shares an address,
+and the second person to try got told they had claimed too many times. The
+hundred-copy cap on the Promo row is still the real ceiling — this only stops
+one person spending it. Default raised in `packages/env` and `.env.example`
+too, so a fresh deploy does not inherit the old number.
+
+---
+
 ## Session 9 — analytics
 
 **Google tag plus five events chosen to answer questions, not fill a dashboard.**

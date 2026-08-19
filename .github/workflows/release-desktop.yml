@@ -50,8 +50,13 @@ jobs:
           workspaces: apps/desktop/src-tauri
           key: ${{ matrix.platform }}
 
+      # packages/db has a `postinstall: prisma generate`, and prisma.config.ts
+      # reads DATABASE_URL through prisma/config's `env()` helper, which throws
+      # if the variable is missing entirely — so even the install needs it set.
       - name: Install deps
         run: pnpm install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
 
       # The desktop app imports @contextjule/core and @contextjule/ui, which are
       # plain TypeScript sources — nothing needs the database. Generating the
@@ -104,6 +109,14 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # `secrets` is not in the context list for a step-level `if` — GitHub does not
+    # evaluate it to an empty string, it rejects the entire file with
+    # "Unrecognized named-value: 'secrets'", so no job in this workflow runs at all.
+    # `env` IS available there, so the same test becomes legal once the secret is
+    # hoisted to the job. Found once in session 4 and reintroduced since; the tell
+    # is that the failure is an Invalid-workflow-file annotation, not a failed step.
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -159,12 +172,11 @@ jobs:
           path: latest.json
 
       - name: Upload to R2
-        if: ${{ secrets.R2_ACCOUNT_ID != '' }}
+        if: env.R2_ACCOUNT_ID != ''
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           set -euo pipefail
