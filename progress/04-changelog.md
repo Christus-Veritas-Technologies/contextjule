@@ -4,6 +4,46 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 15 — the count moves
+
+**The reader cannot make the number arrive smoothly, because it does not
+arrive smoothly.** Claude Code writes one `usage` block when an assistant
+message *completes*, not while it streams — so a ninety-second reply lands as a
+single jump of forty thousand tokens no matter how often the file is read.
+Dropping the poll to 250ms would have learned the same number sooner and cost
+four directory walks a second to do it. It is now 1s, and that is the honest
+ceiling for the transcript path.
+
+So the liveness went where the granularity actually is, and where it is free:
+
+**The status line was invisible to the app.** It runs as a *separate process*
+writing straight into the same SQLite file, on every render — by far the
+finest-grained feed there is. Nothing in the app process could know when one of
+those writes landed; the windows only refreshed because the transcript reader
+happened to see the same turn a moment later. `spawn_store_watcher` polls one
+`MAX(updated_at)` every 400ms and emits `session-updated` when it moves,
+whoever moved it. Cheaper than a filesystem watcher on the database, and it
+cannot miss an edit the way a debounced watcher can — the number either changed
+or it did not.
+
+The writer thread no longer emits. One event path for both writers beats two
+that fire twice for the same change.
+
+**`useCountUp`.** The number rolls to where it landed and the meter fills
+behind it, twelve frames over 600ms, eased out so a big jump reads as a lurch
+that settles rather than an odometer at constant speed. Quantised, not a 60fps
+tween: the digits are a pixel font and a smooth interpolation spends most of
+its frames drawing glyphs the font has no shape for.
+
+**Display only, and this is the important part.** Her load state, her pose,
+every threshold and every reaction still read the raw count. Tweening the value
+she reacts to would delay the reaction — which is the whole product. The label
+says "heavy" the instant she is; the count catches up behind her. Snaps on
+first paint (opening onto a busy session is not a journey), on sample readings,
+and under `prefers-reduced-motion`.
+
+---
+
 ## Session 14 — the first installer, an honest button, and some motion
 
 **The release pipeline ran.** `ContextJule-Setup.exe`, `ContextJule.dmg`,

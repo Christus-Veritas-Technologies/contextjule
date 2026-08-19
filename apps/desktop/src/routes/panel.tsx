@@ -3,6 +3,7 @@ import { formatTokens } from "@contextjule/core/format";
 import { Meter } from "@contextjule/ui/components/meter";
 import { Scene } from "@contextjule/ui/components/scene";
 import { TitleBar } from "@contextjule/ui/components/window-frame";
+import { useCountUp } from "@contextjule/ui/hooks/use-count-up";
 import { createFileRoute } from "@tanstack/react-router";
 
 import * as ipc from "../lib/ipc";
@@ -28,6 +29,7 @@ function Panel() {
   const tokens = sample ? MOCK_SURFACE.tokens : jule.tokens;
   const windowSize = jule.windowSize;
   const load = LOAD_STATE_SPECS[jule.load];
+  const shown = useCountUp(tokens, { enabled: !sample });
 
   return (
     <div className="flex h-svh flex-col overflow-hidden border-3 border-ink bg-cream">
@@ -55,12 +57,12 @@ function Panel() {
             {load.label}
           </span>
           <span className="font-pixel text-[12px] text-[#231b12]">
-            {live ? formatTokens(tokens) : MOCK_SURFACE.tokenText}
+            {live ? formatTokens(shown) : MOCK_SURFACE.tokenText}
           </span>
         </div>
 
         <Meter
-          tokens={tokens}
+          tokens={shown}
           windowSize={windowSize}
           filled={sample ? MOCK_SURFACE.meterFilled : undefined}
           segmentHeight={16}

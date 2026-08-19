@@ -3,6 +3,7 @@ import { formatTokens } from "@contextjule/core/format";
 import { Meter } from "@contextjule/ui/components/meter";
 import { Sprite } from "@contextjule/ui/components/sprite";
 import { TitleBar } from "@contextjule/ui/components/window-frame";
+import { useCountUp } from "@contextjule/ui/hooks/use-count-up";
 import { createFileRoute } from "@tanstack/react-router";
 
 import * as ipc from "../lib/ipc";
@@ -26,6 +27,7 @@ function TrayFlyout() {
   const tokens = sample ? MOCK_SURFACE.tokens : jule.tokens;
   const windowSize = jule.windowSize;
   const load = LOAD_STATE_SPECS[jule.load];
+  const shown = useCountUp(tokens, { enabled: !sample });
 
   return (
     <div className="flex h-svh flex-col overflow-hidden border-3 border-ink bg-sky">
@@ -41,14 +43,14 @@ function TrayFlyout() {
             <span className="font-pixel text-[11px] text-[#12283d]">{load.label}</span>
             <span className="text-[11px] text-[#3d4f61]">
               {live
-                ? `${formatTokens(tokens)} of ${Math.round(windowSize / 1000)}k used`
+                ? `${formatTokens(shown)} of ${Math.round(windowSize / 1000)}k used`
                 : "nothing being watched"}
             </span>
           </div>
         </div>
 
         <Meter
-          tokens={tokens}
+          tokens={shown}
           windowSize={windowSize}
           filled={sample ? MOCK_SURFACE.meterFilled : undefined}
           segmentHeight={11}

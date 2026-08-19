@@ -373,9 +373,22 @@ fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
 
 /// How often the transcript readers look for new bytes.
 ///
-/// Short enough that the meter moves while a reply is still streaming, long
-/// enough that one directory walk per tick costs nothing anyone can feel.
-const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+/// One second, not less. Each tick walks the transcript tree and stats every
+/// file in it, and the thing being read only moves in whole turns: Claude Code
+/// writes one `usage` block when an assistant message completes, not while it
+/// streams. Polling four times a second would cost four times as much to learn
+/// the same number four times.
+///
+/// The status line is the granular feed — it fires on every render, and
+/// `STORE_WATCH_INTERVAL` below is what makes that visible quickly.
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// How often the store is checked for a write this process did not make.
+///
+/// Faster than the readers on purpose: this is one `MAX(updated_at)` against a
+/// small table, not a directory walk, and it is the path a connected status
+/// line arrives on.
+const STORE_WATCH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// Start the transcript readers and write what they find into the store.
 ///
@@ -403,7 +416,6 @@ fn spawn_source_readers(handle: tauri::AppHandle) {
                 continue;
             };
 
-            let mut wrote = false;
             for reading in batch {
                 // The key is already source-prefixed, and the status line writes
                 // the same key for the same conversation — so the two paths
@@ -417,14 +429,38 @@ fn spawn_source_readers(handle: tauri::AppHandle) {
                     tokens: reading.tokens,
                 };
                 // One bad row must not stop the others or kill the thread.
-                if store::session_upsert(&store, upsert, now()).is_ok() {
-                    wrote = true;
+                // Nothing is emitted here — `spawn_store_watcher` notices the
+                // write, which keeps one event path for both writers instead of
+                // firing twice for the same change.
+                let _ = store::session_upsert(&store, upsert, now());
+            }
+        }
+    });
+}
+
+/// Tell every window when the store changes, whoever changed it.
+///
+/// The five surfaces are separate webviews that reload on `session-updated`.
+/// Emitting from the writer thread would only cover readings this process
+/// produced; the status line writes into the same database from its own
+/// process on every render, and that is the feed with real per-keystroke
+/// resolution. Watching the table itself covers both, and means neither writer
+/// has to know an event exists.
+fn spawn_store_watcher(handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut seen: i64 = -1;
+        loop {
+            if let Some(store) = handle.try_state::<Store>() {
+                if let Ok(touched) = store::sessions_touched_at(&store) {
+                    // The first pass only takes a baseline. Emitting on launch
+                    // would reload five windows that have just loaded.
+                    if seen >= 0 && touched != seen {
+                        let _ = handle.emit("session-updated", ());
+                    }
+                    seen = touched;
                 }
             }
-
-            if wrote {
-                let _ = handle.emit("session-updated", ());
-            }
+            std::thread::sleep(STORE_WATCH_INTERVAL);
         }
     });
 }
@@ -504,8 +540,9 @@ pub fn run() {
                 windows::restore_visibility(&handle, &store);
             }
 
-            // The transcript readers, which need the store managed above.
+            // Both need the store managed above.
             spawn_source_readers(handle.clone());
+            spawn_store_watcher(handle.clone());
 
             let janitor = handle.clone();
             std::thread::spawn(move || loop {

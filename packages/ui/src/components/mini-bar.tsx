@@ -12,6 +12,7 @@ import { formatTokens } from "@contextjule/core/format";
 import { cn } from "@contextjule/ui/lib/utils";
 import type * as React from "react";
 
+import { useCountUp } from "../hooks/use-count-up";
 import { Button } from "./button";
 import { Meter } from "./meter";
 import { Sprite } from "./sprite";
@@ -54,6 +55,10 @@ function MiniBar({
   const load = loadSpecFor(tokens);
   const act = ACTIVITY_SPECS[activity];
   const asleep = activity === "asleep";
+
+  // The number and the meter roll; the label and the colour do not. She should
+  // say "heavy" the instant she is, and let the count catch up behind her.
+  const shown = useCountUp(asleep ? 0 : tokens);
 
   const labelSize = size === "compact" ? 8 : size === "expanded" ? 10 : 9;
   const numberSize = size === "compact" ? 10 : size === "expanded" ? 13 : 11;
@@ -103,15 +108,11 @@ function MiniBar({
             className="font-pixel whitespace-nowrap text-[#231b12]"
             style={{ fontSize: numberSize }}
           >
-            {asleep ? "—" : formatTokens(tokens)}
+            {asleep ? "—" : formatTokens(shown)}
           </span>
         </div>
 
-        <Meter
-          tokens={asleep ? 0 : tokens}
-          windowSize={windowSize}
-          segmentHeight={segmentHeight}
-        />
+        <Meter tokens={shown} windowSize={windowSize} segmentHeight={segmentHeight} />
 
         {dims.hasCaption ? (
           <span

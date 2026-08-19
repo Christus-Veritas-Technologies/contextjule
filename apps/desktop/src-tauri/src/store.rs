@@ -340,6 +340,21 @@ pub struct Stats {
     pub time_together_ms: i64,
 }
 
+/// The newest `updated_at` in the table, or 0 when there is nothing in it.
+///
+/// This is how the app notices a write it did not make. The status line runs as
+/// a separate process and writes straight into the same SQLite file, so no
+/// amount of watching our own code paths would ever see it land. One indexed
+/// `MAX()` over a table with a few hundred rows is cheaper than a filesystem
+/// watcher on the database, and it cannot miss an edit the way a debounced
+/// watcher can — the number either moved or it did not.
+pub fn sessions_touched_at(store: &Store) -> Result<i64> {
+    let conn = store.0.lock().unwrap();
+    let newest: Option<i64> =
+        conn.query_row("SELECT MAX(updated_at) FROM sessions", [], |row| row.get(0))?;
+    Ok(newest.unwrap_or(0))
+}
+
 pub fn stats(store: &Store) -> Result<Stats> {
     let conn = store.0.lock().unwrap();
     conn.query_row(

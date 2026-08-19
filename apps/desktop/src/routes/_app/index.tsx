@@ -2,6 +2,7 @@ import { LOAD_STATE_SPECS } from "@contextjule/core/context";
 import { formatDuration, formatTokensExact } from "@contextjule/core/format";
 import { Meter } from "@contextjule/ui/components/meter";
 import { SpeechBox } from "@contextjule/ui/components/speech-box";
+import { useCountUp } from "@contextjule/ui/hooks/use-count-up";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { JuleStage } from "../../components/jule-stage";
@@ -29,6 +30,10 @@ function Home() {
   const sample = !jule.live && !hasHost();
   const tokens = sample ? MOCK_SESSION.tokens : jule.tokens;
   const elapsed = jule.session ? Date.now() - jule.session.startedAt : MOCK_SESSION.elapsedMs;
+
+  // Display only. Her load state, her pose and every threshold still read the
+  // raw count — tweening the number she reacts to would delay the reaction.
+  const shown = useCountUp(tokens, { enabled: !sample });
 
   // The patrol is her idle. Anything she is actively doing outranks it.
   const override =
@@ -65,10 +70,10 @@ function Home() {
             </span>
           </div>
 
-          <span className="font-pixel text-[22px] text-[#12283d]">{formatTokensExact(tokens)}</span>
+          <span className="font-pixel text-[22px] text-[#12283d]">{formatTokensExact(shown)}</span>
 
           <Meter
-            tokens={tokens}
+            tokens={shown}
             windowSize={jule.windowSize}
             filled={sample ? MOCK_SESSION.meterFilled : undefined}
             segmentWidth={11}
