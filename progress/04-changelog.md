@@ -4,6 +4,65 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 16 — six bugs, four of them invisible
+
+Started from the multi-session question and did not stop there.
+
+**1. She followed the wrong chat, and often none.** `useCurrentSession` asked
+for one row `ORDER BY started_at DESC LIMIT 1` and *then* checked whether it
+was live. Filtering after a LIMIT can only throw away the answer: whenever the
+most recently opened session was a finished one, she reported nothing running
+while a four-hour session sat there moving. And "most recently started" is the
+wrong sort anyway — opening a second terminal for a quick question made her
+abandon the session that mattered. Now `session_current` in SQL: filter, then
+sort by `updated_at`, then limit. The one that is moving is the one being
+written to.
+
+**2. She went blind on any session anyone left for lunch.** The janitor closes
+sessions idle for thirty minutes. Nothing ever reopened one — `session_upsert`
+kept updating `last_tokens` on a row it had marked finished, so the resumed
+session could never be current again. The long, heavy sessions worth watching
+are exactly the ones that get left for lunch.
+
+A write is now proof of life. Reopening also pushes `started_at` forward by
+exactly the idle gap, so time-together counts the time someone was in the
+session and not the three days the window sat open behind a lock screen.
+Verified against SQLite directly: a session resumed after three hours reports
+one minute of elapsed time, which is what it had.
+
+**3. The sessions screen's "all" toggle did nothing.** `useAsync` built
+`reload` with `useCallback(..., [])` around a loader that closes over its
+arguments — so it kept calling the first one forever. Switching to "all"
+changed `since` and `limit` and then re-ran a closure holding the old values.
+The loader is in a ref now and the effect keys off the arguments. `reload` is
+still stable, which it has to be: it is handed to an event listener.
+
+**4. An event listener leaked on every unmount.** `listen()` resolves a tick
+later than cleanup runs, so the handle arrived after the component was gone and
+nothing ever unregistered it. Five windows opening and closing surfaces all day
+makes that a leak rather than a curiosity.
+
+**5. Snapping was wrong on a second monitor.** `snap_to_edge` compared window
+positions against `monitor.size()`, which is an extent, not a rectangle. Every
+coordinate is in the virtual desktop, where a second screen starts where the
+first ends and can start at a negative x — so a mini bar parked on the second
+monitor snapped to the primary one's coordinates and flew across the desk.
+`monitor.position()` was the missing origin.
+
+**6. Two buttons could stick disabled forever.** The licence card set `busy`
+true, awaited, and set it false as a separate statement. `deactivate` does not
+catch — it throws straight through `ipc.call` — so one failed update check or
+one offline release left both controls dead for the rest of the session,
+including the one that frees the machine. try/finally, the way `SourcesCard`
+already did it. `Activate` was checked and is safe: it catches internally.
+
+**Migration 0002** rather than a line added to 0001. An install that has run
+0001 never runs it again, so editing it would give every existing database a
+different schema from every new one. That is the whole reason the list is
+append-only, and the index `session_current` needs had to go in its own entry.
+
+---
+
 ## Session 15 — the count moves
 
 **The reader cannot make the number arrive smoothly, because it does not

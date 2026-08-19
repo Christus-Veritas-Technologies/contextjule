@@ -132,26 +132,39 @@ pub fn set_click_through(app: &AppHandle, label: &str, ignore: bool) -> tauri::R
 }
 
 /// Park a window against the nearest screen edge, the way the mini bar snaps.
+///
+/// Every coordinate here is in the virtual desktop, where a second monitor
+/// starts wherever the first one ends and can start at a negative x. The
+/// first version compared window positions against `monitor.size()` alone,
+/// which is only the monitor's *extent* — so a mini bar parked on a second
+/// screen snapped to coordinates belonging to the primary one and flew across
+/// the desk. `monitor.position()` is the missing origin.
 pub fn snap_to_edge(window: &WebviewWindow, threshold: i32) -> tauri::Result<()> {
     let Ok(Some(monitor)) = window.current_monitor() else {
         return Ok(());
     };
+    let origin = monitor.position();
     let screen = monitor.size();
     let position = window.outer_position()?;
     let size = window.outer_size()?;
 
+    let left = origin.x;
+    let top = origin.y;
+    let right = origin.x + screen.width as i32;
+    let bottom = origin.y + screen.height as i32;
+
     let mut x = position.x;
     let mut y = position.y;
 
-    if x < threshold {
-        x = 0;
-    } else if (screen.width as i32 - (x + size.width as i32)) < threshold {
-        x = screen.width as i32 - size.width as i32;
+    if x - left < threshold {
+        x = left;
+    } else if right - (x + size.width as i32) < threshold {
+        x = right - size.width as i32;
     }
-    if y < threshold {
-        y = 0;
-    } else if (screen.height as i32 - (y + size.height as i32)) < threshold {
-        y = screen.height as i32 - size.height as i32;
+    if y - top < threshold {
+        y = top;
+    } else if bottom - (y + size.height as i32) < threshold {
+        y = bottom - size.height as i32;
     }
 
     if x != position.x || y != position.y {

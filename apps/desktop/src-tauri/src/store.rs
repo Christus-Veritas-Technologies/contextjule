@@ -92,6 +92,15 @@ const MIGRATIONS: &[&str] = &[
     );
     INSERT OR IGNORE INTO license (id, status) VALUES (1, 'unlicensed');
     "#,
+    // 0002 — the index `session_current` reads.
+    //
+    // A new migration rather than a line added to 0001: an install that has
+    // already run 0001 will never run it again, so editing it would give
+    // every existing database a different schema from every new one. That is
+    // the whole reason this list is append-only.
+    r#"
+    CREATE INDEX IF NOT EXISTS sessions_updated_at ON sessions(updated_at DESC);
+    "#,
 ];
 
 impl Store {
@@ -204,6 +213,22 @@ pub fn session_upsert(store: &Store, input: SessionUpsert, now: i64) -> Result<S
                 window_size = excluded.window_size,
                 last_tokens = excluded.last_tokens,
                 peak_tokens = MAX(sessions.peak_tokens, excluded.last_tokens),
+                -- A write is proof the session is alive again.
+                --
+                -- The janitor closes anything idle for thirty minutes. Without
+                -- this line, coming back to a session after lunch left
+                -- `ended_at` set forever, so the app kept updating a row it
+                -- considered finished and she went blind on it — the one
+                -- session most likely to be the long, heavy one worth watching.
+                --
+                -- Pushing `started_at` forward by exactly the idle gap keeps
+                -- time-together honest: the resumed session contributes the
+                -- time someone was actually in it, not the three days the
+                -- window sat open behind a lock screen. NULL - anything is
+                -- NULL in SQLite, so the COALESCE makes this a no-op for a
+                -- session that was never closed.
+                started_at  = sessions.started_at + COALESCE(?8 - sessions.ended_at, 0),
+                ended_at    = NULL,
                 updated_at  = ?8",
             params![
                 input.id,
@@ -256,6 +281,27 @@ pub fn sessions_list(store: &Store, since: Option<i64>, limit: i64) -> Result<Ve
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![since, limit], map_session)?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// The session she should be watching right now, if there is one.
+///
+/// Most recently *written to*, not most recently started. Anyone running two
+/// or three chats at once wants the one that is moving, and the one that is
+/// moving is the one being appended to — opening a second terminal for a quick
+/// question must not make her abandon the four-hour session behind it.
+///
+/// Done here rather than in the webview because the old version asked for one
+/// row ordered by `started_at` and then filtered it for "not ended", which
+/// returns nothing at all whenever the newest session is the finished one.
+/// Filtering after a LIMIT can only ever throw away the answer.
+pub fn session_current(store: &Store) -> Result<Option<Session>> {
+    let conn = store.0.lock().unwrap();
+    let sql = format!(
+        "SELECT {SESSION_COLUMNS} FROM sessions
+         WHERE ended_at IS NULL
+         ORDER BY updated_at DESC LIMIT 1"
+    );
+    Ok(conn.query_row(&sql, [], map_session).optional()?)
 }
 
 pub fn session_end(store: &Store, id: &str, now: i64) -> Result<()> {

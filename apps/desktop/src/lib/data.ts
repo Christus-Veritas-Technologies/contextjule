@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type CosmeticSlot,
@@ -21,12 +21,21 @@ function useSessionEvents(reload: () => void) {
   useEffect(() => {
     if (!ipc.hasHost()) return;
     let unlisten: (() => void) | undefined;
+    // `listen` resolves a tick later, so an unmount can land first. Without
+    // the flag the handle arrives after cleanup has already run and the
+    // listener outlives the component that wanted it — five windows opening
+    // and closing surfaces all day makes that a leak, not a curiosity.
+    let cancelled = false;
     void import("@tauri-apps/api/event").then(({ listen }) =>
       listen("session-updated", () => reload()).then((fn) => {
-        unlisten = fn;
+        if (cancelled) fn();
+        else unlisten = fn;
       }),
     );
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [reload]);
 }
 
@@ -38,33 +47,54 @@ function useSessionEvents(reload: () => void) {
  * reading lands, the writer will emit a Tauri event and these become
  * subscriptions; the call sites will not have to change.
  */
-function useAsync<T>(load: () => Promise<T>, initial: T) {
+function useAsync<T>(load: () => Promise<T>, initial: T, key = "") {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
+
+  /**
+   * The newest loader, so `reload` can stay stable without going stale.
+   *
+   * `reload` is handed to an event listener and to an effect, so it has to
+   * keep its identity or every store write would tear down and re-register a
+   * listener. But the loader closes over its arguments, and the old version
+   * captured the very first one forever: switching the sessions screen from
+   * "today" to "all" changed `since` and `limit` and then re-ran a closure
+   * still holding yesterday's values, so the toggle did nothing at all.
+   *
+   * Declared before the effect that calls it, because effects run in the
+   * order they are written and this one has to be current by then.
+   */
+  const latest = useRef(load);
+  useEffect(() => {
+    latest.current = load;
+  });
 
   const reload = useCallback(() => {
     let cancelled = false;
     setLoading(true);
-    load()
+    latest
+      .current()
       .then((next) => !cancelled && setData(next))
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-    // The caller passes a stable function; re-running on every render would
-    // hammer the database.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => reload(), [reload]);
+  // `key` is whatever the caller's arguments amount to. Changing it refetches.
+  useEffect(() => reload(), [reload, key]);
   useSessionEvents(reload);
 
   return { data, loading, reload };
 }
 
 export function useSessions(since?: number, limit?: number) {
-  return useAsync(() => ipc.sessionsList(since, limit), [] as ipc.Session[]);
+  return useAsync(
+    () => ipc.sessionsList(since, limit),
+    [] as ipc.Session[],
+    `${since ?? ""}:${limit ?? ""}`,
+  );
 }
 
 export function useStats() {
@@ -106,11 +136,18 @@ export function useSettings() {
   return { settings: local, loading, set, bool, reload };
 }
 
-/** The live session, if the reader has told us about one. */
+/**
+ * The live session, if the reader has told us about one.
+ *
+ * One SQL query that filters *then* limits. The old version asked for the
+ * single most recently started session and then checked whether it happened to
+ * be live, which answered "nothing is running" whenever the newest session was
+ * a finished one — and made her follow whichever chat was opened last rather
+ * than whichever is actually moving. Anyone with two terminals open hit both.
+ */
 export function useCurrentSession() {
-  const { data, loading, reload } = useSessions(undefined, 1);
-  const current = data.find((session) => session.endedAt === null) ?? null;
-  return { session: current, loading, reload };
+  const { data, loading, reload } = useAsync(() => ipc.sessionCurrent(), null as ipc.Session | null);
+  return { session: data, loading, reload };
 }
 
 /** Which readers exist and whether their directories are there. */

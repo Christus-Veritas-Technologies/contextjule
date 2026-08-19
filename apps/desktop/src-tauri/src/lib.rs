@@ -154,6 +154,12 @@ fn sessions_list(
     store::sessions_list(&store, since, limit.unwrap_or(50))
 }
 
+/// The one session she is watching. See `store::session_current`.
+#[tauri::command]
+fn session_current(store: tauri::State<'_, Store>) -> store::Result<Option<Session>> {
+    store::session_current(&store)
+}
+
 #[tauri::command]
 fn session_end(store: tauri::State<'_, Store>, id: String) -> store::Result<()> {
     store::session_end(&store, &id, now())
@@ -489,6 +495,7 @@ pub fn run() {
             settings_all,
             session_upsert,
             sessions_list,
+            session_current,
             session_end,
             session_cleanse,
             session_collapse,

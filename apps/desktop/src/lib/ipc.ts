@@ -83,6 +83,13 @@ export const sessionUpsert = (input: SessionUpsert) =>
   call<Session | null>("session_upsert", { input }, null);
 export const sessionsList = (since?: number, limit?: number) =>
   call<Session[]>("sessions_list", { since: since ?? null, limit: limit ?? null }, []);
+/**
+ * The one session she is watching: the most recently written-to live one.
+ *
+ * A command rather than a filter over `sessionsList`, because the filter has
+ * to run before the LIMIT and only SQL can do that.
+ */
+export const sessionCurrent = () => call<Session | null>("session_current", undefined, null);
 export const sessionEnd = (id: string) => call<void>("session_end", { id }, undefined);
 export const sessionCleanse = (id: string) => call<void>("session_cleanse", { id }, undefined);
 

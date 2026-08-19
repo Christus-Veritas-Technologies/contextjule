@@ -54,11 +54,18 @@ export function LicenseCard() {
           variant="secondary"
           className="flex-1"
           disabled={busy}
+          // try/finally, not two statements: a failed update check throws
+          // through `ipc.call`, and without this both buttons here stay
+          // disabled for the rest of the session with no way back except
+          // relaunching — including the one that releases the machine.
           onClick={async () => {
             setBusy(true);
-            if (status.kind === "available" || status.kind === "ready") await install();
-            else await check();
-            setBusy(false);
+            try {
+              if (status.kind === "available" || status.kind === "ready") await install();
+              else await check();
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           {updateLabel(status)}
@@ -70,8 +77,11 @@ export function LicenseCard() {
           disabled={busy || !state.licenseKey}
           onClick={async () => {
             setBusy(true);
-            await deactivate();
-            setBusy(false);
+            try {
+              await deactivate();
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           release this machine
