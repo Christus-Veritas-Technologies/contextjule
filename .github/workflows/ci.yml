@@ -33,7 +33,13 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # packages/db has a `postinstall: prisma generate`, and prisma.config.ts
+      # reads DATABASE_URL through prisma/config's `env()` helper, which throws
+      # if the variable is missing entirely. Generate never touches a real
+      # database — this is a dummy, same as the Dockerfile build arg.
       - run: pnpm install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/contextjule
 
       # The Prisma client is generated, not committed, so anything that
       # typechecks has to produce it first.
