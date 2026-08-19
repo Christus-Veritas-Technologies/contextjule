@@ -15,7 +15,6 @@ mod tray;
 mod windows;
 
 use serde::Serialize;
-use std::sync::mpsc;
 use store::{Session, SessionUpsert, Stats, Store};
 
 use sources::{SourceRunner, SourceStatus};
@@ -31,7 +30,10 @@ use tauri::{Emitter, Manager, WindowEvent};
 /// part of a licence activation the user themselves started.
 #[tauri::command]
 fn machine_id(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = app.path().app_config_dir().map_err(|e| format!("no config dir: {e}"))?;
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("no config dir: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join("machine-id");
 
@@ -282,7 +284,9 @@ fn surface_click_through(app: tauri::AppHandle, label: String, ignore: bool) -> 
 /// written down or sent anywhere.
 #[tauri::command]
 fn cursor_position(app: tauri::AppHandle) -> Result<(f64, f64), String> {
-    app.cursor_position().map(|p| (p.x, p.y)).map_err(|e| e.to_string())
+    app.cursor_position()
+        .map(|p| (p.x, p.y))
+        .map_err(|e| e.to_string())
 }
 
 /// Where a window currently sits, so the overlay can work out which way she is
