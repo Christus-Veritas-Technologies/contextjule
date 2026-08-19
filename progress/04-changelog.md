@@ -1,0 +1,132 @@
+# Changelog
+
+Newest first. This is where the **reasoning** lives — git has the file list.
+
+---
+
+## Session 9 — analytics
+
+**Google tag plus five events chosen to answer questions, not fill a dashboard.**
+
+- `promo_view` (once per visit, from the CTA owning the `buy` anchor only —
+  the landing page renders `PromoCta` twice and firing from both would halve the
+  apparent conversion rate), `begin_checkout`, `purchase`, `checkout_blocked`,
+  `download_link_resent`.
+- `begin_checkout` and `purchase` use GA4's reserved names exactly, so they feed
+  the built-in ecommerce reports instead of a custom-event list nobody opens.
+- `purchase` fires when the key lands, not on the redirect: Dodo bounces back on
+  `processing` too, and counting those inflates revenue with sales that never
+  cleared. Guarded in `localStorage` by transaction id, because `/thanks` is a
+  refreshable, bookmarkable URL.
+- Everything routes through `lib/analytics.ts`, which no-ops when `gtag` is
+  absent — SSR, pre-load, and every visitor with an ad blocker. Given who buys a
+  Claude Code tool, that last group is not small, and none of it may throw
+  inside a handler that also starts a checkout.
+
+**Not verified:** no event has been observed arriving in GA4.
+**Not built:** Consent Mode v2. Flagged, not done — it needs a banner and a
+stored preference, which is a product decision.
+
+---
+
+## Session 8 — the promo counter did not count
+
+**Two bugs with one root: the phase and the price lived in different systems and
+nothing tied them together.**
+
+- The counter only incremented on `totalMinor === 0`. The Dodo product was
+  $14.99, so every "free" claim charged full price and the count never moved —
+  the giveaway would have run forever. Now keyed off the offer the *checkout*
+  recorded, with a loud `[promo] MISMATCH` when the two disagree (D-008).
+- `--limit 1` had been applied to the wrong database. `DATABASE_URL` falls back
+  to `apps/server/.env` (localhost), so a production command silently updated a
+  laptop. The script now prints its target, and flags localhost.
+- The production database is only reachable from inside the deployment, so
+  `POST /api/promo` was added behind the admin token — same operations as the
+  CLI, run by the server that is already in there. Every call logs before/after,
+  because this is the one endpoint that changes what visitors are charged and it
+  leaves no other trace.
+- Rate limits doubled. They are keyed per IP, and everyone behind one CGNAT or
+  office proxy shares a bucket, so a limit sized for one person is a quarter of
+  that for four.
+
+---
+
+## Session 7 — the seven commands that were never wired
+
+**`tsc`, `clippy -D warnings` and `cargo fmt` all passed on code that could not
+work.**
+
+`session_collapse`, `sessions_close_stale`, `surface_visible`,
+`surface_set_visible`, `surface_snap`, `autostart_enabled` and `autostart_set`
+were all defined with `#[tauri::command]` and left out of `invoke_handler`.
+Every call would have failed at runtime with "command not found": the collapse
+counter, the surface toggles, "start with the machine", snap-on-drag-release.
+Found by a grep that a verification step asked for, not by any tool.
+
+**The lesson worth keeping:** every check in this project passed. The gap was
+between two lists that no check compared. That is Pillar 6, and it now has a
+script.
+
+Also: a fix of mine duplicated seven TypeScript wrappers that already existed on
+the other branch, producing 14 `TS2451` redeclarations after the merge. I had
+grepped one branch and assumed the other matched.
+
+---
+
+## Session 6 — the marketing site, and the launch promotion
+
+- Every section rebuilt from `designs/site/landing.html`: the hero band (sky,
+  three stepped clouds, hill clip-path, two-tone grass, two tuft rows, her
+  22-second patrol), three parchment pillars, four dusk state cards, four sky
+  ritual rows, grass price band.
+- Responsive via a new `Sheet` in `packages/ui`, built from the three rules
+  rather than a library default, with a real dialog underneath so focus
+  trapping and Escape work.
+- The three-phase launch: free → 72h at $4.99 → list. Live over SSE with one
+  shared poller (a query per subscriber would turn launch day into a
+  self-inflicted load test), polling fallback after three stream failures.
+- Copy rewritten to sell outcomes and to call Jule a her — not "the desktop
+  agent", not "pet".
+
+**Divergence:** the design's headline was "Your context window, with a pulse."
+Replaced with "Never lose a good session again." The design's line describes the
+mechanism; the owner asked for outcomes. Reversible in `page.tsx`.
+
+---
+
+## Session 5 — no discount codes
+
+Reversed the earlier design (D-005). Several of the places this gets posted do
+not allow promo codes, and a code is a second thing that can be wrong. The
+product's price is now the price, edited by hand as the launch moves. This is
+what later produced the session-8 counter bug — the two halves of "what does
+this cost" were now in different systems.
+
+Also: Resend replaced with nodemailer over SMTP (D-009).
+
+---
+
+## Session 4 — the backend nobody could have used
+
+**Nothing wrote a `Release` row.** CI uploaded installers to R2 and
+`/api/downloads/latest` answered "there is no published build yet" —
+permanently. Every download link in every purchase email resolved to nothing.
+
+Also found: `if: ${{ secrets.R2_ACCOUNT_ID != '' }}` — GitHub does not expose
+the `secrets` context to a step's `if`. It evaluated to `'' != ''`, so the R2
+upload step had never run and never would. Verified against GitHub's context
+availability table rather than assumed.
+
+---
+
+## Sessions 1–3 — foundation, screens, context reading
+
+Scaffold, design system, all desktop screens from the archive, then the context
+reader (D-001) and the desktop app's features: patrol, wardrobe, onboarding,
+cosmetics, the SQLite store, five windows, tray.
+
+**Fixed in passing:** `loadStateFor(Infinity)` returned `"fresh"`. `!isFinite()`
+is right for NaN and backwards for +Infinity — a runaway count is the *most*
+alarming reading there is. Caught by the very first test run, which is the
+argument for writing them.
