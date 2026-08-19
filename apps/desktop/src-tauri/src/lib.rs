@@ -15,9 +15,10 @@ mod tray;
 mod windows;
 
 use serde::Serialize;
+use std::sync::mpsc;
 use store::{Session, SessionUpsert, Stats, Store};
 
-use sources::{SourceRunner, SourceStatus};
+use sources::{Reading, SourceRunner, SourceStatus};
 use tauri::{Emitter, Manager, WindowEvent};
 
 // ── identity ────────────────────────────────────────────────────────────────
@@ -368,6 +369,66 @@ fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     }
 }
 
+// ── context readers ─────────────────────────────────────────────
+
+/// How often the transcript readers look for new bytes.
+///
+/// Short enough that the meter moves while a reply is still streaming, long
+/// enough that one directory walk per tick costs nothing anyone can feel.
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Start the transcript readers and write what they find into the store.
+///
+/// Until this existed, `sources/` compiled and was never run: the only thing
+/// that ever wrote a reading was `statusline.rs`, so with the status line
+/// uninstalled she watched nothing at all. Old sessions still showed on the
+/// growth screen, because those rows were already in the database — which is
+/// exactly the shape of bug that looks like it is working.
+///
+/// Two threads on purpose. The reader does blocking file I/O and never touches
+/// SQLite; this one owns every write and every event, so a poll in which five
+/// sessions moved wakes the windows once, not five times.
+fn spawn_source_readers(handle: tauri::AppHandle) {
+    let (tx, rx) = mpsc::channel::<Reading>();
+
+    std::thread::spawn(move || SourceRunner::new().run(tx, POLL_INTERVAL));
+
+    std::thread::spawn(move || {
+        // Block for the first reading, then take the rest of that poll's batch.
+        while let Ok(first) = rx.recv() {
+            let mut batch = vec![first];
+            batch.extend(rx.try_iter());
+
+            let Some(store) = handle.try_state::<Store>() else {
+                continue;
+            };
+
+            let mut wrote = false;
+            for reading in batch {
+                // The key is already source-prefixed, and the status line writes
+                // the same key for the same conversation — so the two paths
+                // converge on one row instead of racing for two.
+                let upsert = SessionUpsert {
+                    id: reading.session_key,
+                    source: reading.source.to_string(),
+                    title: reading.title,
+                    model: reading.model,
+                    window_size: Some(reading.window_size),
+                    tokens: reading.tokens,
+                };
+                // One bad row must not stop the others or kill the thread.
+                if store::session_upsert(&store, upsert, now()).is_ok() {
+                    wrote = true;
+                }
+            }
+
+            if wrote {
+                let _ = handle.emit("session-updated", ());
+            }
+        }
+    });
+}
+
 // ── entry point ─────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -442,6 +503,9 @@ pub fn run() {
             if let Some(store) = handle.try_state::<Store>() {
                 windows::restore_visibility(&handle, &store);
             }
+
+            // The transcript readers, which need the store managed above.
+            spawn_source_readers(handle.clone());
 
             let janitor = handle.clone();
             std::thread::spawn(move || loop {

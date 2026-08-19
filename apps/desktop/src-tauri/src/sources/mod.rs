@@ -23,21 +23,13 @@
 //! sessions screen; the status line, once installed, reports the same sessions
 //! with higher confidence and wins.
 
-// NOT YET RUNNING. `SourceRunner::status()` is called — the settings screen
-// lists these readers and whether their directories exist — but nothing calls
-// `poll_all` or `run`, so no transcript is ever actually read. Every reading
-// Jule reacts to today comes from the status line path in `statusline.rs`.
+// Wired in as of `spawn_source_readers` in lib.rs: a reader thread polls every
+// source and a writer thread folds each `Reading` into the same `session_upsert`
+// the status line uses, then emits `session-updated` for the five windows.
 //
-// That makes the "no setup at all" promise in the doc comment above false for
-// now: with the status line uninstalled, she sees nothing. The missing piece is
-// a thread spawned at startup that feeds `run`'s channel into the same store
-// upsert the status line uses; the leftover `use std::sync::mpsc` in lib.rs was
-// the start of it.
-//
-// The allow is scoped to this module rather than sprinkled item by item, so
-// that deleting this block is all it takes to see exactly what is still unused
-// once the runner is wired in.
-#![allow(dead_code)]
+// Before that, this module compiled, `status()` was called, and `poll_all` never
+// was — so with the status line uninstalled nothing was ever read, while the
+// growth screen kept showing rows already in the database.
 
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -69,6 +61,11 @@ pub struct Reading {
 /// Parsed out of a format its owners call internal.
 pub const CONFIDENCE_TRANSCRIPT: u8 = 60;
 /// Handed to us by the tool itself, through an interface meant for this.
+///
+/// No caller yet: the status line writes the same row under the same key rather
+/// than competing for it, so nothing has to compare the two today. It stays
+/// because the moment a source disagrees with another, something will.
+#[allow(dead_code)]
 pub const CONFIDENCE_EXACT: u8 = 100;
 
 pub trait ContextSource: Send {

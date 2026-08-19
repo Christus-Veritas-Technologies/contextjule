@@ -4,6 +4,44 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 13 — she was never reading anything
+
+**The transcript readers had never been run.** `sources/mod.rs` said so in a
+comment at the top of the file: `status()` was called — which is why the
+settings screen listed both readers and their directories quite happily — and
+`poll_all` never was. The only thing that ever wrote a reading was
+`statusline.rs`. So with the status line uninstalled she watched nothing, while
+the growth screen kept showing 104 hours and 1.4M tokens from rows already in
+the database. A bug that presents as *old data fine, new data absent* is almost
+always a writer that stopped, not a reader that broke.
+
+`spawn_source_readers` in `lib.rs` closes it: one thread polls every source
+every two seconds, a second thread folds each `Reading` into the same
+`session_upsert` the status line uses and emits `session-updated`. The frontend
+already listened for that event (`useSessionEvents` in `lib/data.ts`) and had
+been listening to silence.
+
+Two threads rather than one because the reader does blocking file I/O and must
+never hold the SQLite lock. The writer batches a poll's readings so five moving
+sessions wake the five windows once, not twenty-five times. Both paths key on
+`claude-code:<session-id>`, so the status line and the transcript converge on
+one row instead of racing for two — which is also why `CONFIDENCE_EXACT` still
+has no caller.
+
+**Not a bug: the Claude desktop app.** These readers tail
+`~/.claude/projects/*.jsonl` (Claude Code) and `~/.codex/sessions/` (Codex).
+The Claude *desktop app* keeps its conversations server-side and writes no
+transcript, so there is nothing on disk to read. Worth saying on the sources
+screen before someone else spends an evening on it.
+
+**`routeTree.gen.ts` is no longer gitignored.** `pnpm build` runs `tsc --noEmit`
+*before* vite, and only vite's router plugin writes that file — so on a clean
+checkout tsc failed with `Cannot find module './routeTree.gen'` plus one error
+per route, and the desktop release died in `beforeBuildCommand`. It passed here
+because the file exists on this machine. TanStack's guidance is to commit it.
+
+---
+
 ## Session 12 — two packages are called `contextjule`
 
 **`pnpm --filter contextjule exec tauri build` matched two projects.**
