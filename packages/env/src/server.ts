@@ -74,7 +74,7 @@ export const env = createEnv({
     ARTIFACT_BASE_URL: z.url().optional(),
 
     /** Free claims allowed from one IP per day. Blunt, and enough. */
-    FREE_CLAIM_IP_LIMIT: z.coerce.number().int().positive().default(3),
+    FREE_CLAIM_IP_LIMIT: z.coerce.number().int().positive().default(5),
 
     // --- publishing ---------------------------------------------------------
     /**
