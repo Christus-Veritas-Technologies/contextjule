@@ -279,7 +279,7 @@ fn render(reading: Option<&StatusReading>, payload: &Value) -> String {
 
     const CELLS: usize = 14;
     let filled = if reading.tokens > 0 {
-        ((used * CELLS as f64).round() as usize).max(1).min(CELLS)
+        ((used * CELLS as f64).round() as usize).clamp(1, CELLS)
     } else {
         0
     };
