@@ -15,8 +15,8 @@ mod tray;
 mod windows;
 
 use serde::Serialize;
-use store::{Session, SessionUpsert, Stats, Store};
 use std::sync::mpsc;
+use store::{Session, SessionUpsert, Stats, Store};
 
 use sources::{SourceRunner, SourceStatus};
 use tauri::{Emitter, Manager, WindowEvent};
@@ -68,11 +68,9 @@ fn fill_random(buf: &mut [u8]) {
     use std::time::{SystemTime, UNIX_EPOCH};
     // Seeded from the clock and the pid. Adequate for an identifier that only
     // has to be unique across one person's machines — it guards nothing.
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0)
-        ^ ((std::process::id() as u64) << 32);
+    let seed =
+        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0)
+            ^ ((std::process::id() as u64) << 32);
     let mut state = seed | 1;
     for byte in buf.iter_mut() {
         state ^= state << 13;

@@ -136,10 +136,7 @@ pub fn window_size_for(model: Option<&str>) -> i64 {
 
 pub fn now_millis() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 /// Drives every source on one thread and forwards what they find.

@@ -1,0 +1,12 @@
+# The style this crate is already written in, made explicit.
+#
+# CI runs `cargo fmt --check`, and stock rustfmt wanted to explode a couple of
+# hundred lines of perfectly readable code — one-line struct literals, short
+# method chains, `let ... else { return }` — into vertical stacks. That is a
+# disagreement about taste, not a defect, and the fix is to write the taste down
+# rather than let every `cargo fmt` fight the codebase.
+#
+# `use_small_heuristics = "Max"` is the whole of it: anything that fits inside
+# max_width may stay on one line.
+max_width = 100
+use_small_heuristics = "Max"

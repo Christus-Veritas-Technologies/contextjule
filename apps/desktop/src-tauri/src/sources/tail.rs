@@ -98,7 +98,9 @@ fn walk(dir: &Path, extension: &str, depth: usize, out: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(file_type) = entry.file_type() else { continue };
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         if file_type.is_dir() {
             if depth > 0 {
                 walk(&path, extension, depth - 1, out);

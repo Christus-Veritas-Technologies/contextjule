@@ -42,7 +42,9 @@ fn read_settings(path: &PathBuf) -> Value {
 
 /// Is our command currently the configured status line?
 pub fn is_installed() -> bool {
-    let Some(path) = settings_path() else { return false };
+    let Some(path) = settings_path() else {
+        return false;
+    };
     let settings = read_settings(&path);
     settings
         .get("statusLine")
@@ -151,10 +153,7 @@ pub fn run() {
 
 fn displaced_command() -> Option<String> {
     let path = settings_path()?;
-    read_settings(&path)
-        .get(PREVIOUS_KEY)
-        .and_then(Value::as_str)
-        .map(str::to_string)
+    read_settings(&path).get(PREVIOUS_KEY).and_then(Value::as_str).map(str::to_string)
 }
 
 fn run_previous(command: &str, stdin_payload: &str) -> Option<String> {
@@ -171,12 +170,8 @@ fn run_previous(command: &str, stdin_payload: &str) -> Option<String> {
         builder
     };
 
-    let mut child = shell
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+    let mut child =
+        shell.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
 
     if let Some(stdin) = child.stdin.as_mut() {
         let _ = stdin.write_all(stdin_payload.as_bytes());
@@ -200,16 +195,10 @@ fn extract(payload: &Value) -> Option<StatusReading> {
     // Null before the first API call, and again after /compact until the next
     // one. Not an error — just nothing to say yet.
     let tokens = context.get("total_input_tokens").and_then(Value::as_i64)?;
-    let window_size = context
-        .get("context_window_size")
-        .and_then(Value::as_i64)
-        .unwrap_or(200_000);
+    let window_size = context.get("context_window_size").and_then(Value::as_i64).unwrap_or(200_000);
 
-    let title = payload
-        .get("session_name")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| {
+    let title =
+        payload.get("session_name").and_then(Value::as_str).map(str::to_string).or_else(|| {
             payload
                 .get("workspace")
                 .and_then(|w| w.get("project_dir"))
@@ -240,7 +229,9 @@ fn record(reading: &StatusReading) {
     let Some(path) = app_data_dir().map(|dir| dir.join("contextjule.db")) else {
         return;
     };
-    let Ok(store) = Store::open(&path) else { return };
+    let Ok(store) = Store::open(&path) else {
+        return;
+    };
 
     let _ = store::session_upsert(
         &store,
@@ -283,9 +274,7 @@ fn render(reading: Option<&StatusReading>, payload: &Value) -> String {
     } else {
         0
     };
-    let meter: String = (0..CELLS)
-        .map(|index| if index < filled { '█' } else { '░' })
-        .collect();
+    let meter: String = (0..CELLS).map(|index| if index < filled { '█' } else { '░' }).collect();
 
     let model = reading.model.as_deref().unwrap_or("");
     let branch = payload

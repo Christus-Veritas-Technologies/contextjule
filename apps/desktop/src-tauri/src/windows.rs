@@ -52,7 +52,9 @@ pub fn hide(app: &AppHandle, label: &str) -> tauri::Result<()> {
 }
 
 pub fn toggle(app: &AppHandle, label: &str) -> tauri::Result<bool> {
-    let Some(window) = get(app, label) else { return Ok(false) };
+    let Some(window) = get(app, label) else {
+        return Ok(false);
+    };
     if window.is_visible().unwrap_or(false) {
         window.hide()?;
         Ok(false)
@@ -103,8 +105,12 @@ pub fn remember_position(store: &Store, label: &str, x: i32, y: i32) {
 /// Put every window back where it was. Called once, at startup.
 pub fn restore_positions(app: &AppHandle, store: &Store) {
     for label in ALL {
-        let Ok(Some(raw)) = store::settings_get(store, &position_key(label)) else { continue };
-        let Ok(saved) = serde_json::from_str::<SavedPosition>(&raw) else { continue };
+        let Ok(Some(raw)) = store::settings_get(store, &position_key(label)) else {
+            continue;
+        };
+        let Ok(saved) = serde_json::from_str::<SavedPosition>(&raw) else {
+            continue;
+        };
         if let Some(window) = get(app, label) {
             // If the monitor it was on has since been unplugged, Tauri clamps
             // it back onto a real screen rather than stranding it off-canvas.
@@ -127,7 +133,9 @@ pub fn set_click_through(app: &AppHandle, label: &str, ignore: bool) -> tauri::R
 
 /// Park a window against the nearest screen edge, the way the mini bar snaps.
 pub fn snap_to_edge(window: &WebviewWindow, threshold: i32) -> tauri::Result<()> {
-    let Ok(Some(monitor)) = window.current_monitor() else { return Ok(()) };
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return Ok(());
+    };
     let screen = monitor.size();
     let position = window.outer_position()?;
     let size = window.outer_size()?;

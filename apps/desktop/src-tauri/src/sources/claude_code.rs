@@ -35,11 +35,7 @@ pub struct ClaudeCodeSource {
 
 impl ClaudeCodeSource {
     pub fn new() -> Self {
-        Self {
-            tailer: Tailer::default(),
-            latest: std::collections::HashMap::new(),
-            primed: false,
-        }
+        Self { tailer: Tailer::default(), latest: std::collections::HashMap::new(), primed: false }
     }
 }
 
@@ -90,11 +86,8 @@ impl ContextSource for ClaudeCodeSource {
                 continue;
             };
 
-            let mut state = self
-                .latest
-                .get(session_id)
-                .cloned()
-                .unwrap_or_else(|| blank(session_id, modified));
+            let mut state =
+                self.latest.get(session_id).cloned().unwrap_or_else(|| blank(session_id, modified));
 
             let mut changed = false;
 
@@ -169,8 +162,9 @@ fn apply(state: &mut Reading, entry: &Value) -> bool {
     };
 
     let field = |name: &str| usage.get(name).and_then(Value::as_i64).unwrap_or(0);
-    let tokens =
-        field("input_tokens") + field("cache_creation_input_tokens") + field("cache_read_input_tokens");
+    let tokens = field("input_tokens")
+        + field("cache_creation_input_tokens")
+        + field("cache_read_input_tokens");
 
     // Zero means the entry had no usable usage block, not an empty window.
     if tokens <= 0 {
@@ -183,8 +177,5 @@ fn apply(state: &mut Reading, entry: &Value) -> bool {
 
 /// The last path segment, which is what a person calls the project.
 fn project_name(cwd: &str) -> String {
-    cwd.rsplit(['/', '\\'])
-        .find(|segment| !segment.is_empty())
-        .unwrap_or(cwd)
-        .to_string()
+    cwd.rsplit(['/', '\\']).find(|segment| !segment.is_empty()).unwrap_or(cwd).to_string()
 }
