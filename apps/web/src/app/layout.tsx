@@ -27,6 +27,19 @@ export const metadata: Metadata = {
     title: "ContextJule",
     description: "A little friend who carries your chat so you do not have to.",
   },
+  /**
+   * The name iOS writes under the icon on a home screen.
+   *
+   * The icons themselves need no entry here: `app/favicon.ico`,
+   * `app/icon0.svg`, `app/icon1.png`, `app/apple-icon.png` and
+   * `app/manifest.json` are App Router file conventions, and Next emits the
+   * link tags for them. Declaring them again would only duplicate the tags
+   * and give us two places to forget to update.
+   *
+   * `capable` is deliberately not set: it drops Safari's chrome for anyone
+   * who saves the page, and this is a marketing site, not an app shell.
+   */
+  appleWebApp: { title: "ContextJule" },
 };
 
 export const viewport: Viewport = {
