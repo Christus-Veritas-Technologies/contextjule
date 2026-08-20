@@ -4,6 +4,45 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 17 — Cowork, and a correction
+
+**I was wrong last session.** "The Claude desktop app keeps conversations
+server-side and writes no transcript" is true of the web app and of cloud
+Cowork sessions, and false of the desktop app in local mode. Anthropic
+documents the layout: `local-agent-mode-sessions/` for Cowork and Chat, and
+`claude-code-sessions/` for Code sessions — the latter described as the *same
+per-session layout* Claude Code uses everywhere else.
+
+So `ClaudeCodeSource` now reads every root it knows of, not just
+`~/.claude/projects`: `%LOCALAPPDATA%\Claude`, `%APPDATA%\Claude` and the
+`Claude-3p` variants on Windows, `~/Library/Application Support/Claude` on
+macOS, `$XDG_CONFIG_HOME/Claude` elsewhere — each `claude-code-sessions/`, kept
+only if it exists.
+
+**Adding a candidate root cannot break a reader**, which is why this is safe to
+ship before anyone has confirmed the format on a real machine. `find_files`
+only returns `.jsonl`; every line that does not parse into something the reader
+recognises is skipped; a directory holding a different shape produces no
+readings rather than wrong ones. Worst case it finds nothing and the app
+behaves exactly as it did. `available()` now means *any* root exists rather
+than the terminal's specifically, and `root()` is explicitly a label for the
+settings card, not the source of truth.
+
+**Cloud Cowork cannot be read at all, and the app says so.** A cloud session's
+agent loop runs on Anthropic's infrastructure and is saved to the account;
+there is no file on the machine. The sources card now states which transcripts
+she reads and which never appear — permanently, not only in the empty state.
+Somebody working in Cowork all afternoon watching a meter that never moves will
+conclude the app is broken, and the app is not broken.
+
+**Unverified, and named as such:** whether the desktop app's
+`claude-code-sessions/` really carries `message.usage` per assistant entry.
+That is the one thing the documentation does not say, it decides whether any of
+this produces a reading, and it needs a probe on a machine that has the
+directory. Written ≠ runs.
+
+---
+
 ## Session 16 — six bugs, four of them invisible
 
 Started from the multi-session question and did not stop there.

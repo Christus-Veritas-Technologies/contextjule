@@ -54,19 +54,31 @@ impl ContextSource for ClaudeCodeSource {
         "Claude Code"
     }
 
+    /// The first place that exists, for the settings card to name.
+    ///
+    /// `poll` reads every root, not just this one — see
+    /// `claude_transcript_roots`. This is a label, not the source of truth.
     fn root(&self) -> Option<PathBuf> {
-        super::claude_config_dir().map(|dir| dir.join("projects"))
+        super::claude_transcript_roots()
+            .into_iter()
+            .next()
+            .or_else(|| super::claude_config_dir().map(|dir| dir.join("projects")))
+    }
+
+    /// Any root at all, rather than just the canonical one.
+    fn available(&self) -> bool {
+        !super::claude_transcript_roots().is_empty()
     }
 
     fn poll(&mut self) -> Vec<Reading> {
-        let Some(root) = self.root() else {
-            return Vec::new();
-        };
-
         let now = now_millis();
         let mut readings = Vec::new();
 
-        for path in find_files(&root, "jsonl", 2) {
+        // Every known root, not just the terminal's. A session id is unique
+        // across them, and `latest` is keyed by it, so the same conversation
+        // reached from two directories still resolves to one row.
+        let roots = super::claude_transcript_roots();
+        for path in roots.iter().flat_map(|root| find_files(root, "jsonl", 3)) {
             let modified = modified_millis(&path);
 
             // On the very first poll, read recent transcripts in full so the

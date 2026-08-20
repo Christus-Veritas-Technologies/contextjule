@@ -107,6 +107,74 @@ pub fn claude_config_dir() -> Option<PathBuf> {
     home_dir().map(|home| home.join(".claude"))
 }
 
+/// Every directory the Claude Code transcript format is known to appear in.
+///
+/// Two of them, because Claude Code is not only a terminal any more. The
+/// desktop app runs Code sessions of its own and keeps them under its own
+/// application-data directory in the same per-session layout, so someone who
+/// works there rather than in a terminal has transcripts on disk that
+/// `~/.claude/projects` knows nothing about.
+///
+/// Adding a candidate is free and cannot break a reader: `find_files` only
+/// returns `.jsonl`, and every line that does not parse into something we
+/// recognise is skipped. A directory that turns out to hold a different shape
+/// produces no readings rather than wrong ones.
+///
+/// What is *not* here, and cannot be: a Cowork or Chat session that ran in the
+/// cloud. Those execute on Anthropic's infrastructure and are saved to the
+/// account, so there is no file on this machine to read. She is honest about
+/// that on the sources card rather than sitting at zero looking broken.
+pub fn claude_transcript_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(dir) = claude_config_dir() {
+        roots.push(dir.join("projects"));
+    }
+
+    for base in desktop_app_data_dirs() {
+        roots.push(base.join("claude-code-sessions"));
+    }
+
+    roots.retain(|path| path.exists());
+    roots.dedup();
+    roots
+}
+
+/// Where the Claude desktop app keeps its data, per platform.
+///
+/// `Claude-3p` is the same app in third-party mode — a separate directory so
+/// the two can coexist. Both are listed because a machine can have either.
+fn desktop_app_data_dirs() -> Vec<PathBuf> {
+    let mut bases = Vec::new();
+    let names = ["Claude", "Claude-3p"];
+
+    if cfg!(target_os = "windows") {
+        for key in ["LOCALAPPDATA", "APPDATA"] {
+            if let Some(root) = std::env::var_os(key) {
+                for name in names {
+                    bases.push(PathBuf::from(&root).join(name));
+                }
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        if let Some(home) = home_dir() {
+            for name in names {
+                bases.push(home.join("Library/Application Support").join(name));
+            }
+        }
+    } else if let Some(home) = home_dir() {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".config"));
+        for name in names {
+            bases.push(config.join(name));
+        }
+    }
+
+    bases.retain(|path| path.exists());
+    bases
+}
+
 /// Where the app keeps its own data, computed without a Tauri handle.
 ///
 /// The status line runs as a bare process with no app to ask, so this has to

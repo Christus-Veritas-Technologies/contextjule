@@ -62,6 +62,16 @@ export function SourcesCard() {
         </span>
       ) : null}
 
+      {/* Said plainly and permanently, because the alternative is somebody
+          working in Cowork all afternoon watching a meter that never moves and
+          concluding the app is broken. It is not broken; there is nothing on
+          the disk to read. */}
+      <span className="text-[11px] leading-[1.5] text-[#5b6b7c]">
+        She reads transcripts on this machine — Claude Code in a terminal or inside
+        the desktop app, and Codex. Cowork and Chat sessions that run in the cloud
+        are saved to your account, not to a file here, so they never show up.
+      </span>
+
       <div className="mt-0.5 flex flex-col gap-1.5 border-t-2 border-[#c2cdd6] pt-2.5">
         <span className="text-[11px] leading-[1.5] text-[#5b6b7c]">
           {statusline
