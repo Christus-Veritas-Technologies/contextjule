@@ -120,6 +120,9 @@ export interface LatestRelease {
     filename: string;
     sizeBytes: number | null;
     sha256: string | null;
+    /** Null when no public bucket is configured; the page then offers the
+     *  emailed link instead of a dead button. */
+    url: string | null;
   }>;
 }
 

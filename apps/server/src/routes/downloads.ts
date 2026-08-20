@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { badRequest, clientIp, gone, notFound } from "../lib/http";
-import { hashToken, signArtifactUrl, verifyArtifactUrl } from "../lib/tokens";
+import { hashToken, publicArtifactUrl, signArtifactUrl, verifyArtifactUrl } from "../lib/tokens";
 import { deliverPurchase, latestRelease } from "../services/provisioning";
 
 export const downloadRoutes = new Hono();
@@ -25,6 +25,10 @@ downloadRoutes.get("/latest", async (c) => {
         filename: a.filename,
         sizeBytes: a.sizeBytes,
         sha256: a.sha256,
+        // Public, and null when there is no public bucket configured. The
+        // page falls back to "ask for your link again" rather than rendering
+        // a button that goes nowhere.
+        url: publicArtifactUrl(a.storageKey),
       })),
     },
   });

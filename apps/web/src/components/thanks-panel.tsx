@@ -1,12 +1,14 @@
 "use client";
 
+import type { Platform } from "@contextjule/core/downloads";
 import { Button } from "@contextjule/ui/components/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { DownloadButtons } from "@/components/download-buttons";
 import { trackPurchase } from "@/lib/analytics";
-import { type CheckoutStatus, fetchCheckoutStatus } from "@/lib/api";
+import { type CheckoutStatus, fetchCheckoutStatus, type LatestRelease } from "@/lib/api";
 import { claimPurchaseReport, recallCheckout } from "@/lib/session";
 
 /**
@@ -35,12 +37,16 @@ export function ThanksPanel({
   status: statusFromUrl,
   email: emailFromUrl,
   paymentId,
+  release,
+  suggested,
 }: {
   sessionId?: string;
   licenseKey?: string;
   status?: string;
   email?: string;
   paymentId?: string;
+  release?: LatestRelease | null;
+  suggested?: Platform | null;
 }) {
   const [status, setStatus] = useState<CheckoutStatus | null>(null);
   // Seeded from the URL, so the first paint already has it when Dodo sent it.
@@ -194,12 +200,19 @@ export function ThanksPanel({
             machines.
           </p>
 
-          <Link
-            href="/download"
-            className="font-pixel text-[10px] text-gold transition-colors hover:text-gold-hover"
-          >
-            download for windows and mac →
-          </Link>
+          {/* The installer, right here. The gold is already spent on the key
+              above, so these render as bordered links rather than a second
+              filled button competing with it. */}
+          <div className="flex flex-col gap-3 border-t-2 border-night-rule pt-5">
+            <span className="font-pixel text-[9px] text-[#968fa3]">get the app</span>
+            <DownloadButtons release={release ?? null} suggested={suggested} tone="quiet" />
+            <Link
+              href="/download"
+              className="font-pixel text-[10px] text-gold transition-colors hover:text-gold-hover"
+            >
+              all builds and checksums →
+            </Link>
+          </div>
         </>
       )}
     </div>

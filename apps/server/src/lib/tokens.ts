@@ -35,6 +35,23 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * The plain, public URL of an artifact, when the bucket is public.
+ *
+ * The download page needs a link somebody can click, and against a public R2
+ * bucket a signed one buys nothing: R2 ignores the query string, so `?expires=`
+ * and `?signature=` are decorative there. Handing out the real URL is the
+ * honest version of what already happens, and it is what lets the page carry a
+ * download button instead of a paragraph explaining where the link went.
+ *
+ * Null when `ARTIFACT_BASE_URL` is unset, because then there is no public
+ * address to give and the emailed token is the only route.
+ */
+export function publicArtifactUrl(storageKey: string): string | null {
+  if (!env.ARTIFACT_BASE_URL) return null;
+  return `${env.ARTIFACT_BASE_URL.replace(/\/$/, "")}/${storageKey.replace(/^\//, "")}`;
+}
+
 /** A signed URL for one artifact, valid for a few minutes. */
 export function signArtifactUrl(storageKey: string, expiresInMs = SIGNED_URL_TTL_MS): string {
   const expires = Date.now() + expiresInMs;

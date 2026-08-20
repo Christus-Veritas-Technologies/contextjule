@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "../lib/admin";
 import { badRequest, notFound } from "../lib/http";
+import { publicArtifactUrl } from "../lib/tokens";
 
 /**
  * Releases.
@@ -116,6 +117,10 @@ releaseRoutes.get("/latest", async (c) => {
         filename: artifact.filename,
         sizeBytes: artifact.sizeBytes,
         sha256: artifact.sha256,
+        // Kept in step with /api/downloads/latest, which is the one the site
+        // actually calls. Two handlers answering the same question is already
+        // one too many; they must at least not disagree.
+        url: publicArtifactUrl(artifact.storageKey),
       })),
     },
   });

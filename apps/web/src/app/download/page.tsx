@@ -1,4 +1,6 @@
-import { PLATFORM_SPECS, PLATFORMS } from "@contextjule/core/downloads";
+import { detectPlatform, PLATFORM_SPECS, PLATFORMS } from "@contextjule/core/downloads";
+import { headers } from "next/headers";
+import { DownloadButtons } from "@/components/download-buttons";
 import { ResendForm } from "@/components/resend-form";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
@@ -9,13 +11,21 @@ export const dynamic = "force-dynamic";
 /**
  * The download page.
  *
- * Deliberately thin on links: the installer is served from a signed, expiring
- * URL issued to a purchase email, so this page tells you what the current build
- * is and gets you a fresh link — it does not host a permalink. The licence key
- * is what gates the app; the link only stops the installer being mirrored.
+ * It hosts the installers directly, which is a reversal worth naming. The
+ * emailed token was never protection against a public bucket — R2 ignores the
+ * query string, so the signature on those links gates nothing — and pretending
+ * otherwise cost every buyer a trip through their inbox to fetch a file that
+ * was already public. The licence key is the gate. It always was.
+ *
+ * The resend form stays, because the *key* is worth re-sending.
  */
 export default async function Download() {
-  const [release, promo] = await Promise.all([fetchLatestRelease(), fetchPromo()]);
+  const [release, promo, headerList] = await Promise.all([
+    fetchLatestRelease(),
+    fetchPromo(),
+    headers(),
+  ]);
+  const suggested = detectPlatform(headerList.get("user-agent"));
 
   return (
     <main className="flex min-h-svh flex-col bg-night">
@@ -28,9 +38,11 @@ export default async function Download() {
             Get her onto your machine.
           </h1>
           <p className="text-[15px] leading-[1.6] text-[#a8a2b4]">
-            Your download link arrived with your licence key. Links are good for 72 hours — if yours
-            has expired, ask for a fresh one below and it will be in your inbox in a moment.
+            Pick your platform. The installer is free to download — your licence key is what
+            unlocks her, and it arrived by email when you bought a copy.
           </p>
+
+          <DownloadButtons release={release} suggested={suggested} className="mt-1.5" />
         </div>
 
         {/* What is currently shipping. Null before the first build, which is a

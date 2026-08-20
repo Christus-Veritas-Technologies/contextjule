@@ -1,7 +1,9 @@
+import { detectPlatform } from "@contextjule/core/downloads";
+import { headers } from "next/headers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { ThanksPanel } from "@/components/thanks-panel";
-import { fetchPromo } from "@/lib/api";
+import { fetchLatestRelease, fetchPromo } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +28,22 @@ export default async function Thanks({
   const sessionId =
     first(params.session_id) ?? first(params.checkout_session_id) ?? first(params.sessionId);
 
-  const promo = await fetchPromo();
+  // The installer belongs on this page, not one click away. Somebody who has
+  // just paid should not have to navigate anywhere to get the thing they
+  // bought, and the key is right here to paste into it.
+  const [promo, release, headerList] = await Promise.all([
+    fetchPromo(),
+    fetchLatestRelease(),
+    headers(),
+  ]);
 
   return (
     <main className="flex min-h-svh flex-col bg-night">
       <SiteNav promo={promo} />
       <div className="flex flex-1 items-center justify-center px-5 py-14 md:py-20">
         <ThanksPanel
+          release={release}
+          suggested={detectPlatform(headerList.get("user-agent"))}
           sessionId={sessionId}
           licenseKey={first(params.license_key)}
           status={first(params.status)}

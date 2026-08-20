@@ -123,6 +123,11 @@ jobs:
     # is that the failure is an Invalid-workflow-file annotation, not a failed step.
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      # Same reason as above, and the same trap one step further on: a
+      # step's `if` cannot see that step's own `env` either. Job level is
+      # the only level both the condition and the script can read.
+      CONTEXTJULE_ADMIN_TOKEN: ${{ secrets.CONTEXTJULE_ADMIN_TOKEN }}
+      CONTEXTJULE_API_URL: ${{ secrets.CONTEXTJULE_API_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -176,6 +181,55 @@ jobs:
         with:
           name: contextjule-update-manifest
           path: latest.json
+
+      # Tell the API a build exists.
+      #
+      # Without this the installers reach R2 and nothing else knows: the
+      # download page answers 'not published yet' forever and every emailed
+      # link resolves to 'there is no published build'. Session 4 found that
+      # and wrote the route; nothing ever called it.
+      #
+      # storageKey is the object name in the bucket, so the public URL the
+      # site renders is ARTIFACT_BASE_URL + that. Idempotent on
+      # (version, channel): a re-run updates the artifacts rather than
+      # creating a second release.
+      - name: Publish the release to the API
+        if: env.CONTEXTJULE_ADMIN_TOKEN != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          win=artifacts/contextjule-windows/ContextJule-Setup.exe
+          mac=artifacts/contextjule-macos/ContextJule.dmg
+
+          body=$(node -e '
+            const fs = require("node:fs");
+            const crypto = require("node:crypto");
+            const sha = (p) =>
+              crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
+            const entry = (platform, arch, path, filename) => ({
+              platform,
+              arch,
+              filename,
+              storageKey: filename,
+              sizeBytes: fs.statSync(path).size,
+              sha256: sha(path),
+            });
+            console.log(JSON.stringify({
+              version: process.env.VERSION,
+              channel: "stable",
+              artifacts: [
+                entry("windows", "x64", process.argv[1], "ContextJule-Setup.exe"),
+                entry("macos", "universal", process.argv[2], "ContextJule.dmg"),
+              ],
+            }));
+          ' "$win" "$mac")
+
+          curl --fail-with-body -sS -X POST \
+            "${CONTEXTJULE_API_URL%/}/api/releases" \
+            -H "authorization: Bearer ${CONTEXTJULE_ADMIN_TOKEN}" \
+            -H "content-type: application/json" \
+            -d "$body"
 
       - name: Upload to R2
         if: env.R2_ACCOUNT_ID != ''

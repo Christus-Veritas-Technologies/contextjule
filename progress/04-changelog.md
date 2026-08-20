@@ -4,6 +4,53 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 18 — the download page finally has a download on it
+
+**Nothing ever called `POST /api/releases`.** Session 4 found that the release
+workflow uploaded installers and told the API nothing, and wrote the route to
+fix it. The route shipped. The call did not. So `/api/downloads/latest`
+answered `{ release: null }` for every build ever made, the download page said
+*not published yet* under a bucket containing a working installer, and every
+emailed link resolved to "there is no published build". A route with no caller
+is the same as no route, and it looked fixed for fourteen sessions.
+
+The publish job now hashes both installers, measures them, and posts the
+release. `storageKey` is the object name in the bucket, so the public URL is
+`ARTIFACT_BASE_URL` + that. Idempotent on (version, channel), so a re-run
+updates the artifacts instead of creating a second release.
+
+**The same `env` trap, one step further on.** A step's `if` cannot read that
+step's own `env` either — only workflow and job level. `CONTEXTJULE_ADMIN_TOKEN`
+is hoisted to the job beside `R2_ACCOUNT_ID` for exactly the reason written
+there. Third time this shape has cost a run.
+
+**Direct download buttons, and the reversal that allows them.** The emailed
+token was never protection: R2 ignores the query string, so the signature on
+those links gates nothing, and D-0xx already said not to describe it as
+protection. Continuing to route buyers through their inbox to reach a file that
+was already public bought nothing and cost a step. `/api/downloads/latest` now
+returns a plain `url` per artifact — null when `ARTIFACT_BASE_URL` is unset, so
+the page falls back to the resend form rather than rendering a dead button.
+
+`DownloadButtons` gives the platform you are on the gold button and the other a
+quiet bordered one, chosen server-side from the request's user agent by
+`detectPlatform`, which already existed and had no caller. When the agent tells
+us nothing, both are offered equally rather than guessing.
+
+**On the thanks page too, in `quiet` tone.** Gold once per screen: the licence
+key is the gold thing there, and a second filled button beside it would make
+the two argue about which one you came for. Somebody who has just paid should
+not have to navigate anywhere to get what they bought.
+
+The marks are drawn, not imported — two SVG paths that cannot 404, and the
+Windows one is four squares, which is what the rest of this design is made of.
+
+**`PLATFORM_SPECS.windows.extension` said `.msi`.** We ship NSIS. It was only
+ever used for a label, but a spec that disagrees with the artifact is a trap
+laid for whoever reads it next.
+
+---
+
 ## Session 17 — Cowork, and a correction
 
 **I was wrong last session.** "The Claude desktop app keeps conversations

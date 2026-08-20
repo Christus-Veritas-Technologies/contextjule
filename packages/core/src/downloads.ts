@@ -20,8 +20,10 @@ export const PLATFORM_SPECS: Readonly<Record<Platform, PlatformSpec>> = {
   windows: {
     id: "windows",
     label: "Windows",
-    extension: ".msi",
-    arches: ["x64", "arm64"],
+    // What the release workflow actually ships. The MSI is copied when the
+    // bundler produces one, but the NSIS installer is the download.
+    extension: ".exe",
+    arches: ["x64"],
   },
   macos: {
     id: "macos",
