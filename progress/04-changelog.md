@@ -4,6 +4,55 @@ Newest first. This is where the **reasoning** lives — git has the file list.
 
 ---
 
+## Session 19 — the blank window, and two dead buttons
+
+**The blank window was never a crash.** The title bar rendered and the tab
+strip did not, which is the tell: React was running and `AppShell` was
+deliberately drawing nothing. `!ready ? null` — and `ready` never arrived.
+
+`LicenseProvider` derived `loading` from `state === null`, and its failure path
+*also* set `state` to null. So a `license_get` that rejected for any reason at
+all left the app loading for ever, with no error and nothing to click. A read
+that fails means we do not know of a licence, which is precisely what
+`unlicensed` means: `loaded` is now its own flag set in a `finally`, and a
+failed read shows the key screen. A screen, not a void.
+
+**Why the read failed, most likely.** This database has more writers than it
+looks: the app holds one connection across three threads, and the status line
+is a *separate process* that opens the same file, writes a row and exits on
+every render — several times a second while somebody is typing. SQLite returns
+SQLITE_BUSY immediately unless told to wait, and every one of those became a
+rejected promise in a webview with no idea what to do with one.
+`busy_timeout(5s)`. Two builds sharing one data directory — a dev copy and a
+prod copy, say — makes the collision far likelier, which fits when it appeared.
+
+**`CrashGuard`.** React unmounts the whole tree on an uncaught render error, and
+our chrome is part of that tree, so a throw leaves an empty pane with no way
+back. Each surface is its own webview, so one bad screen took out one window
+and left the others running — which reads as haunted rather than broken. Now it
+says what threw and offers a reload. Deliberately plain: it runs when the
+design system may be the thing that broke.
+
+**And `stuck`.** Four seconds of not-ready now says so and offers a retry. The
+no-spinner judgement stands for the normal case; what it never covered was a
+read that does not resolve at all.
+
+**Both mini bar buttons were unreachable, and neither was broken.** The drag
+handler sits on the window root so the whole strip can be dragged, and
+`startDragging` hands the entire gesture to the operating system on
+*pointerdown* — the OS never gives it back, so no click ever reaches what is
+underneath. The dismiss X and the cleanse were being eaten before they were
+pressed. `useWindowDrag` now ignores a pointerdown that lands on a control
+(`closest`, not the target itself, because the press lands on the label inside
+the button). The overlay still drags from her body, which is not a button.
+
+Closing the main window hiding to the tray rather than quitting is deliberate
+and unchanged — a desktop pet that vanishes when you tidy a window is not one.
+Quit is in the tray menu. The X on each surface is what dismisses that surface,
+and now it does.
+
+---
+
 ## Session 18 — the download page finally has a download on it
 
 **Nothing ever called `POST /api/releases`.** Session 4 found that the release

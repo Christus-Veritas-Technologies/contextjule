@@ -116,6 +116,21 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
 
+        // Wait for a lock instead of failing on it.
+        //
+        // This file has more writers than it looks. The app holds one
+        // connection across three threads; the status line is a *separate
+        // process* that opens the same file, writes a row and exits on every
+        // render, several times a second while somebody is typing. Without a
+        // busy timeout SQLite returns SQLITE_BUSY immediately rather than
+        // waiting, so a collision surfaces as a command that simply failed
+        // and every one of those turns into a rejected promise in a webview
+        // that mostly has no idea what to do with one.
+        //
+        // Five seconds is far longer than any write here takes and far
+        // shorter than a hang anyone would call a hang.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+
         let store = Store(Mutex::new(conn));
         store.migrate()?;
         Ok(store)

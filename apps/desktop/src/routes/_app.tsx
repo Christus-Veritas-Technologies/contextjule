@@ -1,6 +1,7 @@
 import { TABS } from "@contextjule/core/surfaces";
 import { TitleBar } from "@contextjule/ui/components/window-frame";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { Activate } from "../components/activate";
 import { Onboarding } from "../components/onboarding";
@@ -38,6 +39,23 @@ function AppShell() {
   const ready = !loading && !settingsLoading;
   const showTabs = ready && unlocked && onboarded;
 
+  /**
+   * Only after it has plainly gone wrong.
+   *
+   * Both reads are local and resolve in a frame or two, so a spinner would
+   * be the slowest thing about opening the app — that judgement stands. What
+   * it did not cover is a read that never resolves at all, which rendered an
+   * empty window with no chrome, no error and nothing to click, and is what
+   * a blank ContextJule window has always been. Four seconds is far past any
+   * honest local read and far short of a wait anyone would sit through.
+   */
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const id = setTimeout(() => setStuck(true), 4_000);
+    return () => clearTimeout(id);
+  }, [ready]);
+
   return (
     <div className="flex h-svh flex-col overflow-hidden border-3 border-ink bg-cream">
       <TitleBar
@@ -48,10 +66,28 @@ function AppShell() {
       />
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {/* No spinner. The licence and settings are local reads that resolve in
-            a frame or two; a flash of loading chrome would be the slowest part
-            of opening the app. */}
-        {!ready ? null : !unlocked ? (
+        {/* No spinner for the normal case: both are local reads that resolve
+            in a frame or two, and a flash of loading chrome would be the
+            slowest part of opening the app. `stuck` is the other case. */}
+        {!ready ? (
+          stuck ? (
+            <div className="flex h-full flex-col items-start justify-center gap-2.5 px-7">
+              <span className="font-pixel text-[11px] text-ink-soft">still reading</span>
+              <span className="text-[12px] leading-[1.5] text-[#6b5b48]">
+                {loading ? "The licence" : "Your settings"} did not come back. That is the
+                local database, so it is almost always another copy of her already
+                running — check the tray.
+              </span>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="cj-press mt-1 border-3 border-ink-soft bg-gold px-3.5 py-2.5 font-pixel text-[10px] text-ink-soft shadow-hard"
+              >
+                try again
+              </button>
+            </div>
+          ) : null
+        ) : !unlocked ? (
           <Activate />
         ) : !onboarded ? (
           <Onboarding onDone={() => void set(ONBOARDED, "true")} />

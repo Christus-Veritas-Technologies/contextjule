@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 
+import { CrashGuard } from "../components/crash-guard";
 import { LicenseProvider } from "../lib/license";
 
 /**
@@ -12,8 +13,10 @@ import { LicenseProvider } from "../lib/license";
  */
 export const Route = createRootRoute({
   component: () => (
-    <LicenseProvider>
-      <Outlet />
-    </LicenseProvider>
+    <CrashGuard>
+      <LicenseProvider>
+        <Outlet />
+      </LicenseProvider>
+    </CrashGuard>
   ),
 });

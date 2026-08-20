@@ -16,6 +16,8 @@ import { appWindow } from "./window";
  *
  * On release the window parks itself against the nearest screen edge, which is
  * what stops a mini bar ending up two pixels off the corner.
+ *
+ * Anything interactive under the pointer wins over the drag. See below.
  */
 export function useWindowDrag(
   surface: ipc.Surface,
@@ -35,6 +37,21 @@ export function useWindowDrag(
       // Left button only. A right-click is a context menu everywhere else and
       // should not fling her across the desktop.
       if (event.button !== 0) return;
+
+      // Not on a control.
+      //
+      // `startDragging` hands the entire gesture to the operating system on
+      // pointerdown, and the OS does not give it back — no click event ever
+      // reaches the element underneath. On the mini bar, where the drag
+      // handler sits on the window root so the whole strip can be dragged,
+      // that silently ate every press on the two buttons inside it: the
+      // dismiss X did nothing and neither did the cleanse. They looked
+      // broken; they were never reached.
+      //
+      // `closest` rather than a check on the target itself, because the
+      // press usually lands on the label inside the button, not the button.
+      const target = event.target as Element | null;
+      if (target?.closest?.("button, a, input, textarea, select, [data-no-drag]")) return;
       dragging.current = true;
       options.onStart?.();
 

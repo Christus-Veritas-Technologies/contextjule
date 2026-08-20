@@ -29,6 +29,20 @@ const LicenseContext = createContext<LicenseContextValue | null>(null);
 
 export function LicenseProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ipc.LicenseState | null>(null);
+  /**
+   * Whether the first read has finished, however it finished.
+   *
+   * Not derived from `state`, and this is the whole point. `loading` used to
+   * be `state === null`, while the failure path also set `state` to null — so
+   * a `license_get` that rejected for any reason left the app loading for
+   * ever. The shell renders nothing until it is ready, so the window came up
+   * as a title bar over an empty cream rectangle with no tabs and no error:
+   * the app looked crashed while React was running perfectly.
+   *
+   * A read that fails means we do not know of a licence, which is exactly
+   * what `unlicensed` means. Show the key screen and let someone act.
+   */
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const revalidated = useRef(false);
 
@@ -50,7 +64,11 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
           ipc.licenseValidate().then((fresh) => !cancelled && setState(fresh)).catch(() => {});
         }
       })
-      .catch(() => !cancelled && setState(null));
+      .catch(() => {
+        // Already logged by `ipc.call`. Falling through to unlicensed is the
+        // honest answer, and it is a screen rather than a void.
+      })
+      .finally(() => !cancelled && setLoaded(true));
 
     return () => {
       cancelled = true;
@@ -89,14 +107,14 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     };
     return {
       state: current,
-      loading: state === null,
+      loading: !loaded,
       unlocked: current.status === "active" || current.status === "offline_grace",
       error,
       activate,
       deactivate,
       revalidate,
     };
-  }, [state, error, activate, deactivate, revalidate]);
+  }, [state, loaded, error, activate, deactivate, revalidate]);
 
   return <LicenseContext.Provider value={value}>{children}</LicenseContext.Provider>;
 }
